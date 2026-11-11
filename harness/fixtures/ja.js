@@ -1,0 +1,90 @@
+// samples/sample.tex に対応する訳文。モデルを呼ばずに、実際の日本語で組版の具合を確かめるためのもの。
+// source は原文の書き出し（先頭の番号や記号は除く）。keep は「訳さず原文を返す」ことを表す。
+export const FIXTURES = [
+  { source: "Layout-Preserving Translation of PDF Documents", ja: "コードエディターの中で行う、レイアウトを保った PDF 文書の翻訳" },
+  { source: "Alex Example", keep: true },
+  { source: "Sam Sample", keep: true },
+  { source: "Institute of Document Engineering", ja: "文書工学研究所" },
+  {
+    source: "Abstract. We describe a viewer that shows a PDF document",
+    ja: "概要. PDF 文書とその訳文を、ページのデザインを変えずに左右に並べて表示するビューアについて述べる。ページは同じ描画エンジンで 2 回描く。1 回はそのまま、もう 1 回は文字を除いて描き、訳文を 2 回目の描画の上に置く。そのため、図、罫線、色付きの背景は原文とまったく同じに保たれる。翻訳はブロックごとに行うので、読者は数秒後には最初の段落を読める。",
+  },
+  { source: "Introduction", ja: "1 はじめに" },
+  {
+    source: "Reading technical documents in a second language is slow",
+    ja: "第二言語で技術文書を読むのは時間がかかり、ビューアと翻訳ツールを行き来すると集中が途切れる。そのため多くの読者は、訳文が原文の隣に、ページ上の同じ位置に表示されることを望んでいる。そうすれば、図、表、数式を一目で見つけられる。",
+  },
+  {
+    source: "Existing tools usually follow one of two routes",
+    ja: "既存のツールは、たいてい 2 つの方法のどちらかをとる。1 つ目は、文書をプレーンテキストや HTML に変換して、その結果を翻訳する方法である。単純だが、元のデザインは失われる。2 つ目は、訳文を入れた新しい PDF ファイルを組み直す方法である。デザインは保てるが、重い処理が必要で、読者はファイル全体が仕上がるまで待たなければならない [1, 2]。",
+  },
+  {
+    source: "In this paper we take a third route",
+    ja: "本稿では第 3 の方法をとる。ページを同じ描画エンジンで 2 回描く。1 回はそのまま、もう 1 回は文字をすべて除いて描く。そのうえで、訳文を通常の Web コンテンツとして 2 枚目の画像の上に置く。文字以外はすべて元の描画命令から作られるので、背景、罫線、図は原文と同一になる。",
+  },
+  { source: "Our contributions are as follows", ja: "本稿の貢献は次のとおりである。" },
+  { source: "a rendering scheme that removes text without touching", ja: "• ベクター図形や画像に触れずに、文字だけを取り除く描画方式" },
+  { source: "a simple geometric method for grouping text", ja: "• 文字を段落にまとめる、単純な幾何学的手法" },
+  { source: "a fitting procedure that keeps each translated paragraph", ja: "• 訳した段落を元の枠の中に収める、はめ込みの手順" },
+  { source: "Method", ja: "2 手法" },
+  { source: "Text-free rendering", ja: "2.1 文字なし描画" },
+  {
+    source: "A PDF page is a list of drawing operators",
+    ja: "PDF のページは描画オペレーターの並びである。この並びを P = (o1, …, on) とし、文字を表示するオペレーターの集合を T ⊂ P とする。並び全体を描画して画像 Ifull を得て、絞り込んだ並び P \\ T を描画して Ibare を得る。",
+  },
+  { source: "For a translated region R the displayed image is", ja: "翻訳した領域 R に対して、表示する画像は次のようになる。" },
+  { source: "otherwise.", ja: "それ以外" },
+  { source: "Regions that are not translated, such as equations", ja: "数式や図の中のラベルのように翻訳しない領域は、元のピクセルのまま残す。" },
+  { source: "Block segmentation", ja: "2.2 ブロックの分割" },
+  {
+    source: "Text fragments are first merged into lines by comparing baselines",
+    ja: "文字の断片は、まずベースラインを比べて行にまとめる。次に、フォントサイズが同じで、横方向に重なり、ページの規則的な行送りに沿っている行をブロックにまとめる。字下げされた行、箇条書きの記号、縦方向の空きがあると、新しいブロックが始まる。",
+  },
+  { source: "Fitting the translation", ja: "2.3 訳文のはめ込み" },
+  {
+    source: "Japanese text often needs slightly more room than English",
+    ja: "日本語の文章は、英語よりも少し広い場所を必要とすることが多い。各ブロックについて、訳した段落が元の枠の高さを超えない最大の倍率 k ∈ [0.7, 1] を探す。そのような倍率がなければ、段落は下の空いた場所へはみ出してよい。",
+  },
+  {
+    source: "Note. The source file is never modified",
+    ja: "注記. 元のファイルは一切変更しない。翻訳ビューを閉じれば、読者は元の文書に戻る。",
+  },
+  { source: "Experiments", ja: "3 実験" },
+  {
+    source: "We measured the method on 120 pages",
+    ja: "説明書、報告書、研究論文から選んだ 120 ページで手法を評価した。表 1 は元の枠に収まったブロックの割合を、図 1 は最初の訳文ブロックが出るまでの時間がページの長さによってどう変わるかを示す。",
+  },
+  { source: "Table 1: Share of translated blocks that fit", ja: "表 1: 元の枠に収まった訳文ブロックの割合。" },
+  { source: "Document type", ja: "文書の種類" },
+  { source: "Pages", ja: "ページ数" },
+  { source: "Blocks", ja: "ブロック数" },
+  { source: "Fit (%)", ja: "適合率 (%)" },
+  { source: "Manuals", ja: "説明書" },
+  { source: "Reports", ja: "報告書" },
+  { source: "Research papers", ja: "研究論文" },
+  { source: "first block", ja: "最初のブロック" },
+  { source: "Blocks per page", ja: "1 ページのブロック数" },
+  { source: "Time (s)", ja: "時間 (秒)" },
+  { source: "Figure 1: Time until the first translated block appears", ja: "図 1: 最初の訳文ブロックが表示されるまでの時間。" },
+  {
+    source: "The share is lowest for research papers",
+    ja: "この割合は研究論文で最も低い。ページの密度が高く、各段落の下に空きがほとんどないためである。",
+  },
+  { source: "Limitations", ja: "4 制約" },
+  {
+    source: "Scanned pages contain no text operators",
+    ja: "スキャンしたページには文字のオペレーターがないので、翻訳の前に光学文字認識が必要である。表はセルごとに翻訳するため、複数のセルにまたがる文は途切れることがある。文中の数式はプレーンテキストとしてモデルに送るので、書き換えられる場合がある。",
+  },
+  { source: "Conclusion", ja: "5 まとめ" },
+  {
+    source: "Drawing the page twice and overlaying translated text",
+    ja: "ページを 2 回描いて訳文を重ねる方法は、エディターの中で動かせる軽さを保ちながら、元の文書のデザインを維持する。今後は、結果を新しい PDF ファイルとして書き出す機能を加える予定である。",
+  },
+  { source: "References", ja: "参考文献" },
+  { source: "A. Example and S. Sample. Rebuilding translated documents", keep: true },
+  { source: "C. Placeholder. A survey of layout analysis", keep: true },
+  {
+    source: "This is a synthetic sample document made for testing",
+    ja: "1 これはテスト用に作った架空のサンプル文書である。文書内の数値はすべて作りものである。",
+  },
+];

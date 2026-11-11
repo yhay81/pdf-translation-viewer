@@ -1,0 +1,250 @@
+/* VS Code のテーマ変数を使い、変数がない場所（検証用ページ）では既定値に落とす。 */
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground, #cccccc);
+  background: var(--vscode-editor-background, #1e1e1e);
+}
+
+#toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, #454545);
+}
+
+#toolbar button {
+  font: inherit;
+  padding: 2px 9px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  color: var(--vscode-button-secondaryForeground, #ffffff);
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  cursor: pointer;
+}
+
+#toolbar button.primary {
+  color: var(--vscode-button-foreground, #ffffff);
+  background: var(--vscode-button-background, #0e639c);
+}
+
+#toolbar button:hover {
+  filter: brightness(1.15);
+}
+
+#toolbar .indicator {
+  min-width: 3.2em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#toolbar .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+#toolbar .status {
+  flex: 1;
+  min-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+#toolbar .status.error {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+#panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.pane {
+  position: relative;
+  overflow: auto;
+}
+
+.pane + .pane {
+  border-left: 1px solid var(--vscode-panel-border, #454545);
+}
+
+/* ペインの左上に固定する「原文」「訳文」の札。高さ 0 の sticky 要素にして、ページの位置を動かさない。 */
+.pane-label {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.pane-label > span {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.pages {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  min-width: 100%;
+  padding: 12px;
+}
+
+.page {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+}
+
+.page > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* レイヤーは pt 座標の BASE 倍で組み、transform で表示倍率に合わせる（main.ts の sizePage）。 */
+.layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* 訳文のブロック */
+.tb {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  pointer-events: auto;
+  cursor: text;
+  line-break: strict;
+  overflow-wrap: anywhere;
+  text-autospace: normal;
+  font-kerning: normal;
+}
+
+.tb:hover {
+  outline: 3px solid rgba(0, 122, 204, 0.55);
+  outline-offset: 6px;
+}
+
+.tb-probe {
+  display: inline-block;
+  width: 0;
+  height: 0;
+}
+
+/* 枠に収まらなかった訳文は下端をぼかして切り、ホバーで全文を出す。 */
+.tb.clipped {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
+
+.tb.clipped:hover {
+  z-index: 5;
+  height: auto !important;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: var(--tb-bg, #ffffff);
+  box-shadow: 0 0 0 16px var(--tb-bg, #ffffff), 0 8px 40px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* 右の訳文にマウスを載せたとき、左の原文の対応箇所に出す印 */
+.highlight {
+  position: absolute;
+  display: none;
+  background: rgba(255, 213, 0, 0.28);
+  outline: 3px solid rgba(230, 160, 0, 0.8);
+  outline-offset: 6px;
+}
+
+/* 「ブロック枠」の表示 */
+.debug-block {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid rgba(0, 110, 255, 0.85);
+}
+
+.debug-block.skipped {
+  border-color: rgba(120, 120, 120, 0.8);
+  border-style: dashed;
+}
+
+.debug-block::before {
+  content: attr(data-label);
+  position: absolute;
+  left: -3px;
+  bottom: 100%;
+  padding: 0 8px;
+  font: 600 26px/34px system-ui, sans-serif;
+  white-space: nowrap;
+  color: #ffffff;
+  background: rgba(0, 110, 255, 0.85);
+}
+
+.debug-block.skipped::before {
+  background: rgba(120, 120, 120, 0.85);
+}
+
+.debug-line {
+  position: absolute;
+  box-sizing: border-box;
+  background: rgba(255, 60, 60, 0.12);
+  border: 1px solid rgba(255, 60, 60, 0.45);
+}
+
+.badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  display: none;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.7);
+}

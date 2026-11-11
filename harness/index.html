@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bilingual PDF Viewer（ブラウザ検証）</title>
+<link rel="stylesheet" href="/dist/webview/style.css">
+<style>
+  /* VS Code の外で見るので、テーマ変数の代わりに最低限の配色を与える。 */
+  html, body { height: 100%; margin: 0; }
+  body { font: 13px/1.4 -apple-system, "Hiragino Sans", sans-serif; }
+</style>
+</head>
+<body>
+<!-- 拡張ホストの代役。Webview のスクリプトより先に読み込む。 -->
+<script type="module" src="/harness/mock-host.js"></script>
+<script type="module" src="/dist/webview/main.js"></script>
+</body>
+</html>

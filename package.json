@@ -1,0 +1,78 @@
+{
+  "name": "bilingual-pdf-viewer",
+  "displayName": "Bilingual PDF Viewer (spike)",
+  "description": "PDF を左右に並べ、右側にレイアウトを保った日本語訳を重ねて表示する検証用プロトタイプ",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "local-spike",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "bilingualPdf.viewer",
+        "displayName": "Bilingual PDF Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "bilingualPdf.translateCurrentPage",
+        "title": "表示中のページを翻訳する",
+        "category": "Bilingual PDF"
+      },
+      {
+        "command": "bilingualPdf.selectModel",
+        "title": "翻訳に使うモデルを選ぶ",
+        "category": "Bilingual PDF"
+      },
+      {
+        "command": "bilingualPdf.listModels",
+        "title": "利用できるモデルを一覧表示する",
+        "category": "Bilingual PDF"
+      },
+      {
+        "command": "bilingualPdf.clearCache",
+        "title": "翻訳キャッシュを消す",
+        "category": "Bilingual PDF"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node esbuild.mjs --tests && node --test dist/test/unit.test.cjs",
+    "test:vscode": "node esbuild.mjs --tests && node test/vscode/runTest.mjs",
+    "sample": "node samples/build.mjs",
+    "harness": "node harness/server.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.5.438"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "1.104.0",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  }
+}
