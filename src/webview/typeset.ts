@@ -1,32 +1,47 @@
-// 訳文を、原文のブロックと同じ位置・大きさの枠に収めて置く。
+// Fits a translation into a box at the same position and of the same size as the source block, and places it there.
 import type { Block, FontInfo } from "./layout";
 
 /**
- * 訳文のレイヤーは、ページの pt 座標を BASE 倍した大きさで組版し、CSS の transform で表示倍率に合わせる。
- * 小さい文字でもブラウザの最小フォントサイズに掛からず、ズームしても改行位置が変わらない。
+ * The layer of translations is typeset at BASE times the pt coordinates of the page, and a CSS transform brings it to the display scale.
+ * Even small text then stays clear of the browser's minimum font size, and zooming does not move the line breaks.
  */
 export const BASE = 4;
 
-/** ここまでは枠の中で縮める。これより小さくするくらいなら、下の余白へ伸ばす。 */
+/** The text is shrunk within the box down to this scale. Rather than going smaller, it extends into the blank space below. */
 const K_SOFT = 0.85;
-/** 縮小の下限。これでも収まらなければ省略表示にする。 */
+/** The lower limit of shrinking. If the text does not fit even at this scale, it is cut short. */
 const K_MIN = 0.7;
-/** 1 行のブロックを 1 行のまま縮める下限。これを下回るなら折り返す。 */
+/** The lower limit for shrinking a one-line block while keeping it on one line. Below this, the text wraps. */
 const K_MIN_SINGLE = 0.6;
 
-const SERIF = '"Times New Roman", Times, "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif CJK JP", "Noto Serif JP", serif';
-const SANS = 'Helvetica, Arial, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, "Noto Sans CJK JP", "Noto Sans JP", sans-serif';
+const LATIN_SERIF = '"Times New Roman", Times';
+const LATIN_SANS = "Helvetica, Arial";
+const JAPANESE_SERIF = '"Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif CJK JP", "Noto Serif JP"';
+const JAPANESE_SANS = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, "Noto Sans CJK JP", "Noto Sans JP"';
 const MONO = 'Menlo, Consolas, "Courier New", "Osaka-Mono", "MS Gothic", monospace';
 
 export interface BlockStyle {
   color: string;
   background: string;
   font: FontInfo | undefined;
+  /** The language of the translation (BCP 47), or an empty string when it is unknown */
+  lang: string;
+}
+
+/**
+ * Chooses a font that matches the typeface of the source (serif, sans-serif or monospace). Japanese fonts are named
+ * only when the translation is in Japanese; for other languages the choice is left to the browser, which goes by the lang attribute.
+ */
+function fontFamily(font: FontInfo | undefined, lang: string): string {
+  if (font?.mono) return MONO;
+  const japanese = lang === "ja";
+  if (font?.serif) return `${LATIN_SERIF}, ${japanese ? `${JAPANESE_SERIF}, ` : ""}serif`;
+  return `${LATIN_SANS}, ${japanese ? `${JAPANESE_SANS}, ` : ""}sans-serif`;
 }
 
 export interface Placed {
   el: HTMLDivElement;
-  /** 原文のフォントサイズに対する倍率 */
+  /** The scale relative to the font size of the source */
   scale: number;
   clipped: boolean;
 }
@@ -34,15 +49,15 @@ export interface Placed {
 export function placeBlock(layer: HTMLElement, block: Block, text: string, style: BlockStyle): Placed {
   const el = document.createElement("div");
   el.className = "tb";
-  el.lang = "ja";
+  if (style.lang) el.lang = style.lang;
   el.dataset.id = block.id;
   el.title = block.text;
   el.style.color = style.color;
   el.style.setProperty("--tb-bg", style.background);
-  el.style.fontFamily = style.font?.mono ? MONO : style.font?.serif ? SERIF : SANS;
+  el.style.fontFamily = fontFamily(style.font, style.lang);
   el.style.fontWeight = style.font?.bold ? "700" : "400";
 
-  // 幅も高さも 0 のインラインブロックは、下端が文字のベースラインに乗る。1 行目のベースライン位置を測るために使う。
+  // The bottom edge of an inline block with zero width and zero height sits on the baseline of the text. It serves to measure where the baseline of the first line is.
   const probe = document.createElement("span");
   probe.className = "tb-probe";
   el.append(probe, text);
@@ -57,7 +72,7 @@ export function placeBlock(layer: HTMLElement, block: Block, text: string, style
   if (single) result = fitSingleLine(el, block, apply);
   result ??= fitParagraph(el, block, apply, single);
 
-  // 1 行目のベースラインを原文に合わせる。
+  // The baseline of the first line is matched to that of the source.
   el.style.top = `${block.firstBaseline * BASE - probe.offsetTop}px`;
   probe.remove();
   if (result.clipped) el.classList.add("clipped");
@@ -72,7 +87,7 @@ function fitSingleLine(el: HTMLDivElement, block: Block, apply: (k: number) => v
   el.style.left = "0px";
   apply(1);
   const natural = el.offsetWidth;
-  // 置いてよい範囲より長いときだけ縮める。
+  // The text is shrunk only when it is longer than the range in which it may be placed.
   const k = Math.min(1, (regionRight - regionLeft) / Math.max(natural, 1));
   if (k < K_MIN_SINGLE) {
     el.style.whiteSpace = "";
@@ -80,7 +95,7 @@ function fitSingleLine(el: HTMLDivElement, block: Block, apply: (k: number) => v
   }
   apply(k);
   const width = el.offsetWidth;
-  // 原文と同じ揃え方で置き、範囲からはみ出す分だけ内側へずらす。
+  // The text is placed with the same alignment as the source, and moved inward only by as much as it sticks out of the range.
   const mid = ((block.x0 + block.x1) / 2) * BASE;
   const anchored = block.align === "center" ? mid - width / 2 : block.align === "right" ? block.x1 * BASE - width : block.x0 * BASE;
   const left = Math.max(regionLeft, Math.min(anchored, regionRight - width));
@@ -100,7 +115,7 @@ function fitParagraph(el: HTMLDivElement, block: Block, apply: (k: number) => vo
     el.style.textIndent = `${-block.hang * BASE}px`;
   }
 
-  // 原文と同じ行数までを「枠の中」とみなす。
+  // Up to the same number of lines as the source counts as "within the box".
   const boxLimit = (block.lines.length + 0.15) * block.pitch * BASE;
   const extendedLimit = Math.max(boxLimit, (block.maxBottom - block.y0) * BASE);
   const fits = (limit: number) => el.offsetHeight <= limit + 1;

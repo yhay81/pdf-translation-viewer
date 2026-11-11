@@ -1,35 +1,43 @@
-// モデルとのやり取りの形式。原文を <b id="…">…</b> の並びで送り、同じ形で訳文を返させる。
-// 返ってくる文字列はストリーミングで細切れに届くので、閉じタグまで届いたブロックから順に取り出す。
+// The format of the exchange with the model. The source goes out as a list of <b id="…">…</b>
+// elements, and the translation comes back in the same form. The answer arrives in fragments, so
+// each block is taken out as soon as its closing tag has arrived.
 import type { SourceBlock } from "../shared/protocol";
 
-/** プロンプトを変えたら上げる。翻訳キャッシュのキーに含めている。 */
-export const PROMPT_VERSION = "1";
+/** Raise this when the prompt changes. It is part of the key of the translation cache. */
+export const PROMPT_VERSION = "2";
 
-const INSTRUCTIONS = `You are a professional technical translator. Translate the blocks of one page of an English PDF into natural, accurate Japanese.
+function instructions(targetLanguage: string): string {
+  const rules = [
+    `Output every block exactly once, in the same order, as <b id="ID">translation</b> with the same ID.`,
+    `Output nothing else: no explanations, no notes, no code fences.`,
+    `Never merge or split blocks, and never write "<b" or "</b>" inside a translation.`,
+    `Translate headings and captions concisely.`,
+    `Keep these unchanged: mathematical expressions, variable names, code, URLs, e-mail addresses, citation marks such as [12], numbers with units, and names of people, products, models, and datasets.`,
+    `Use the established ${targetLanguage} translation of a technical term when there is one. If there is none, keep the original term.`,
+    `If a block has nothing to translate (only a formula, numbers, code, or names), or is already in ${targetLanguage}, output its original text unchanged.`,
+    `The text was extracted from a PDF, so words may be split by end-of-line hyphens or stray spaces. Repair them silently before translating.`,
+  ];
+  // Academic and technical Japanese is written in the plain style.
+  if (/japanese|日本語/i.test(targetLanguage)) rules.splice(3, 0, `Write body text in the plain form (である体).`);
+  return `You are a professional technical translator. Translate the blocks of one page of a PDF into natural, accurate ${targetLanguage}.
 
-Input format: each block is written as <b id="ID">English text</b>.
+Input format: each block is written as <b id="ID">source text</b>.
 
 Output rules:
-- Output every block exactly once, in the same order, as <b id="ID">Japanese translation</b> with the same ID.
-- Output nothing else: no explanations, no notes, no code fences.
-- Never merge or split blocks, and never write "<b" or "</b>" inside a translation.
-- Write body text in plain form (である体). Translate headings and captions concisely.
-- Keep these unchanged: mathematical expressions, variable names, code, URLs, e-mail addresses, citation marks such as [12], numbers with units, and names of people, products, models, and datasets.
-- Technical terms with an established Japanese translation should use it. If there is none, keep the English term.
-- If a block has nothing to translate (only a formula, numbers, or code), output its original text unchanged.
-- The text was extracted from a PDF, so words may be split by end-of-line hyphens or stray spaces. Repair them silently before translating.`;
+${rules.map((rule) => `- ${rule}`).join("\n")}`;
+}
 
-/** 原文に < や & が含まれていても、ブロックの区切りと取り違えられないようにする。 */
+/** Keeps a < or & in the source from being taken for the boundary of a block. */
 function escapeText(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function buildPrompt(blocks: SourceBlock[]): string {
+export function buildPrompt(blocks: SourceBlock[], targetLanguage: string): string {
   const body = blocks.map((block) => `<b id="${block.id}">${escapeText(block.text)}</b>`).join("\n");
-  return `${INSTRUCTIONS}\n\nBlocks to translate:\n${body}`;
+  return `${instructions(targetLanguage)}\n\nBlocks to translate:\n${body}`;
 }
 
-/** 1 回のリクエストに入れる原文の量を抑えるために、ブロックの列を文字数で分ける。 */
+/** Splits the blocks by length, to limit how much source text goes into one request. */
 export function chunkBlocks(blocks: SourceBlock[], maxChars: number): SourceBlock[][] {
   const chunks: SourceBlock[][] = [];
   let current: SourceBlock[] = [];
@@ -54,7 +62,7 @@ export interface ParsedBlock {
 
 const ENTITIES: Record<string, string> = { "&lt;": "<", "&gt;": ">", "&amp;": "&", "&quot;": '"', "&#39;": "'" };
 
-/** ストリーミングで届く文字列から、完結した <b id="…">…</b> を順に取り出す。 */
+/** Takes the complete <b id="…">…</b> elements out of a text that arrives in fragments. */
 export class BlockStreamParser {
   private buffer = "";
 
@@ -71,12 +79,12 @@ export class BlockStreamParser {
       found.push({ id: match[1], text });
       consumed = pattern.lastIndex;
     }
-    // 取り出し終えた部分は捨て、途中まで届いているブロックだけを残す。
+    // Drop what has been taken out, and keep only the block that has arrived in part.
     this.buffer = this.buffer.slice(consumed);
     return found;
   }
 
-  /** まだ閉じていない（途中で切れた）出力が残っているか。 */
+  /** Whether output that was never closed (cut off midway) is left. */
   get hasPartial(): boolean {
     return /<b[\s>]/.test(this.buffer);
   }

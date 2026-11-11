@@ -1,12 +1,12 @@
-// 拡張ホストと Webview の間でやり取りするメッセージの型。
+// The messages between the extension host and the webview.
 
-/** 翻訳に出す 1 ブロック分の原文。 */
+/** The source text of one block to translate. */
 export interface SourceBlock {
   id: string;
   text: string;
 }
 
-/** Webview が読み込む PDF.js の付属ファイルの場所。 */
+/** Where the webview finds the files that PDF.js loads at run time. */
 export interface WebviewAssets {
   workerUrl: string;
   cMapUrl: string;
@@ -15,8 +15,9 @@ export interface WebviewAssets {
 }
 
 export type HostToWebview =
-  | { type: "init"; fileName: string; data: Uint8Array; assets: WebviewAssets; modelLabel: string | null }
+  | { type: "init"; fileName: string; data: Uint8Array; assets: WebviewAssets; modelLabel: string | null; targetLanguage: string }
   | { type: "modelChanged"; modelLabel: string | null }
+  | { type: "targetLanguageChanged"; targetLanguage: string }
   | { type: "blockTranslated"; requestId: number; id: string; text: string; cached: boolean }
   | { type: "translateDone"; requestId: number; missing: string[]; modelLabel: string }
   | { type: "translateError"; requestId: number; message: string }
@@ -29,22 +30,22 @@ export type WebviewToHost =
   | { type: "selectModel" }
   | { type: "report"; event: WebviewReport };
 
-/** Webview から拡張ホストへ送る進捗の報告。ログと結合テストで使う。 */
+/** Progress that the webview reports to the extension host, for the log and the end-to-end test. */
 export type WebviewReport =
   | { kind: "documentLoaded"; pages: number; workerKind: "worker" | "main-thread" }
   | { kind: "pageRendered"; page: number; ms: number }
   | {
       kind: "pageTranslated";
       page: number;
-      /** 翻訳に出したブロック数 */
+      /** Blocks sent for translation */
       requested: number;
-      /** 訳文を重ねたブロック数 */
+      /** Blocks whose translation was laid over the page */
       placed: number;
-      /** 訳文が原文のままだったので、原本の表示を残したブロック数 */
+      /** Blocks that came back untranslated, and so keep their original rendering */
       kept: number;
-      /** 枠に収まらず省略表示になったブロック数 */
+      /** Blocks whose translation did not fit and was cut short */
       clipped: number;
-      /** 文字なし描画で実際に文字が消えていたブロック数 */
+      /** Blocks where the text-free rendering really differed from the normal one */
       inkRemoved: number;
       missing: number;
     }

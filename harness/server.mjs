@@ -1,4 +1,4 @@
-// ブラウザ検証用の静的ファイルサーバー。プロジェクトのルートをそのまま配信する。
+// A static file server for testing in a browser. It serves the root of the project as it is.
 import { createReadStream, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, extname, join, normalize, sep } from "node:path";
@@ -22,7 +22,7 @@ createServer((request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
   const pathname = url.pathname === "/" ? "/harness/index.html" : decodeURIComponent(url.pathname);
   const file = normalize(join(root, pathname));
-  // ルートの外は配信しない。
+  // Nothing outside the root is served.
   if (file !== root && !file.startsWith(root + sep)) {
     response.writeHead(403).end("forbidden");
     return;

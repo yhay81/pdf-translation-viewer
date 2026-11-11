@@ -1,17 +1,18 @@
-// 翻訳の呼び出し先。VS Code の Language Model API（Copilot と、VS Code に登録した BYOK のモデル）と、
-// モデルを呼ばない検証用のダミーの 2 つ。API キーを自前で持つ直接接続を足すときも、この形に合わせる。
+// Where translations come from: the VS Code Language Model API (GitHub Copilot and the other
+// models registered in VS Code), and a dummy for development and tests that calls no model.
+// A backend that talks to a provider directly with its own API key would take the same shape.
 import * as vscode from "vscode";
 import type { SourceBlock } from "../shared/protocol";
 import { buildPrompt } from "./blockProtocol";
 
 export interface TranslationBackend {
-  /** キャッシュのキーに使う識別子 */
+  /** Identifies the backend in the key of the translation cache */
   readonly id: string;
-  /** 画面に出す名前 */
+  /** The name shown on screen */
   readonly label: string;
   readonly cacheable: boolean;
-  /** <b id="…">訳文</b> の並びを、届いた順に細切れで返す。 */
-  stream(blocks: SourceBlock[], token: vscode.CancellationToken): AsyncIterable<string>;
+  /** Yields a list of <b id="…">translation</b> elements, in fragments as they arrive. */
+  stream(blocks: SourceBlock[], targetLanguage: string, token: vscode.CancellationToken): AsyncIterable<string>;
 }
 
 export class VscodeLmBackend implements TranslationBackend {
@@ -24,24 +25,25 @@ export class VscodeLmBackend implements TranslationBackend {
   }
 
   get label(): string {
-    return `${this.model.name}（${this.model.vendor}）`;
+    return `${this.model.name} (${this.model.vendor})`;
   }
 
-  countTokens(blocks: SourceBlock[], token: vscode.CancellationToken): Thenable<number> {
-    return this.model.countTokens(buildPrompt(blocks), token);
+  countTokens(blocks: SourceBlock[], targetLanguage: string, token: vscode.CancellationToken): Thenable<number> {
+    return this.model.countTokens(buildPrompt(blocks, targetLanguage), token);
   }
 
-  async *stream(blocks: SourceBlock[], token: vscode.CancellationToken): AsyncIterable<string> {
-    // Language Model API には system ロールがないので、指示も最初の User メッセージに入れる。
-    const messages = [vscode.LanguageModelChatMessage.User(buildPrompt(blocks))];
-    const response = await this.model.sendRequest(messages, { justification: "PDF の本文を日本語に翻訳するために使います。" }, token);
+  async *stream(blocks: SourceBlock[], targetLanguage: string, token: vscode.CancellationToken): AsyncIterable<string> {
+    // The Language Model API has no system role, so the instructions go into the first user message.
+    const messages = [vscode.LanguageModelChatMessage.User(buildPrompt(blocks, targetLanguage))];
+    const justification = vscode.l10n.t("PDF Translation Viewer sends the text of the page to translate it into {0}.", targetLanguage);
+    const response = await this.model.sendRequest(messages, { justification }, token);
     for await (const fragment of response.text) yield fragment;
   }
 }
 
 const FILLER = "これは検証用のダミー訳文です。原文の文字数に合わせて長さを調整し、訳文が元の枠に収まるかどうかを確かめます。";
 
-/** 原文とおおよそ同じ面積になる長さのダミー訳文を作る（全角 1 文字は半角およそ 2 文字分の幅）。 */
+/** Placeholder Japanese that covers about the same area as the source: a full-width character is about as wide as two Latin ones. */
 export function dummyJapanese(source: string): string {
   const length = Math.max(4, Math.round(source.length * 0.55));
   let out = "";
@@ -51,13 +53,16 @@ export function dummyJapanese(source: string): string {
 
 export class MockBackend implements TranslationBackend {
   readonly id = "mock";
-  readonly label = "ダミー翻訳";
   readonly cacheable = false;
 
-  async *stream(blocks: SourceBlock[], token: vscode.CancellationToken): AsyncIterable<string> {
+  get label(): string {
+    return vscode.l10n.t("Dummy translation");
+  }
+
+  async *stream(blocks: SourceBlock[], _targetLanguage: string, token: vscode.CancellationToken): AsyncIterable<string> {
     for (const block of blocks) {
       const element = `<b id="${block.id}">${dummyJapanese(block.text)}</b>\n`;
-      // タグの途中で切れた断片でも正しく取り出せることを確かめるため、わざと 3 つに分けて流す。
+      // Sent in three pieces on purpose, to exercise the parser on fragments that end inside a tag.
       const third = Math.ceil(element.length / 3);
       for (let i = 0; i < element.length; i += third) {
         await new Promise((resolve) => setTimeout(resolve, 8));

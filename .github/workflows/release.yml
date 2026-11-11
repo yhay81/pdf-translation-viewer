@@ -1,0 +1,78 @@
+name: Release
+
+# Publishes the extension when a version tag such as v0.1.0 is pushed. The Visual Studio
+# Marketplace trusts this workflow through a Trusted Publishing policy on the publisher, so
+# no token is stored for it. Open VSX is optional. See CONTRIBUTING.md.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency: release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - name: Check the tag against package.json and CHANGELOG.md
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not match version $version in package.json."
+            exit 1
+          fi
+          if ! grep -qx "## $version" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $version."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run check
+      - run: npm run package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsix
+          path: "*.vsix"
+          if-no-files-found: error
+      - name: Publish to the Visual Studio Marketplace
+        run: npx vsce publish --oidc --skip-duplicate --packagePath ./*.vsix
+      # Open VSX, for VS Code forks such as VSCodium and Cursor. Runs once the repository variable
+      # OPEN_VSX is "true"; the token is the OVSX_PAT secret. See CONTRIBUTING.md.
+      - name: Publish to Open VSX
+        if: vars.OPEN_VSX == 'true'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx ovsx publish --skip-duplicate --packagePath ./*.vsix
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A re-run of the publish job, such as to publish to Open VSX later, re-runs this job too.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The release $GITHUB_REF_NAME already exists."
+            exit 0
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## $version" '$0 == heading { found = 1; next } found && /^## / { exit } found' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" ./*.vsix --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md

@@ -1,5 +1,5 @@
-// samples/sample.tex に対応する訳文。モデルを呼ばずに、実際の日本語で組版の具合を確かめるためのもの。
-// source は原文の書き出し（先頭の番号や記号は除く）。keep は「訳さず原文を返す」ことを表す。
+// The translations that go with samples/sample.tex. They serve to check how the typesetting turns out with real Japanese, without calling a model.
+// source is the opening of the source text (without a leading number or symbol). keep means "return the source untranslated".
 export const FIXTURES = [
   { source: "Layout-Preserving Translation of PDF Documents", ja: "コードエディターの中で行う、レイアウトを保った PDF 文書の翻訳" },
   { source: "Alex Example", keep: true },

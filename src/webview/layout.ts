@@ -1,13 +1,13 @@
-// PDF から取り出した文字列の断片（run）を、行、そして段落などのブロックにまとめる。
-// 位置関係だけを見る推定で、DOM にも PDF.js にも依存しない。
-// 座標はすべて「倍率 1 のビューポート」の値（単位は pt、原点は左上、y は下向き）。
+// Groups the fragments of text taken out of a PDF (runs) into lines, and then into blocks such as paragraphs.
+// It is an estimate that looks only at positions, and depends on neither the DOM nor PDF.js.
+// All coordinates are in the viewport at scale 1 (the unit is pt, the origin is the top left, and y points down).
 
 export interface FontInfo {
   bold: boolean;
   italic: boolean;
   serif: boolean;
   mono: boolean;
-  /** 数式用のフォント（記号、数式イタリックなど） */
+  /** A font for mathematics (symbols, math italic and so on) */
   math: boolean;
 }
 
@@ -20,7 +20,7 @@ export interface Run {
   bottom: number;
   size: number;
   font: string;
-  /** 直前に空白があったか */
+  /** Whether a space came just before */
   spaceBefore: boolean;
 }
 
@@ -41,9 +41,9 @@ export interface Line {
   size: number;
   font: string;
   text: string;
-  /** 表の行のように、同じ高さに短い断片が 3 つ以上並んでいる */
+  /** Three or more short fragments stand at the same height, as in a row of a table */
   tabular: boolean;
-  /** 原文を消すときに塗り替える範囲。隣の行を削らないように余白を調整してある */
+  /** The area repainted when the source text is erased. Its margins are adjusted so that it does not cut into the neighboring lines */
   erase: Rect;
 }
 
@@ -57,21 +57,21 @@ export interface Block {
   x1: number;
   y1: number;
   text: string;
-  /** 代表のフォントサイズ */
+  /** The representative font size */
   size: number;
-  /** 行送り */
+  /** The line pitch */
   pitch: number;
   font: string;
   firstBaseline: number;
   align: Align;
-  /** 1 行目の字下げがあるか */
+  /** Whether the first line has an indent */
   indentFirst: boolean;
-  /** ぶら下げインデントの幅（参考文献や箇条書き）。なければ 0 */
+  /** The width of the hanging indent (references and list items). 0 when there is none */
   hang: number;
   translatable: boolean;
-  /** 訳文が枠に収まらないときに伸ばしてよい下端 */
+  /** The bottom edge down to which the translation may extend when it does not fit in the box */
   maxBottom: number;
-  /** 訳文を置いてよい左右の範囲（1 行のブロックで使う） */
+  /** The horizontal range in which the translation may be placed (used for one-line blocks) */
   regionLeft: number;
   regionRight: number;
 }
@@ -93,7 +93,7 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** 文字数がいちばん多い値を返す。 */
+/** Returns the value that accounts for the most characters. */
 function dominant<T>(items: Iterable<[T, number]>): T | undefined {
   const counts = new Map<T, number>();
   for (const [key, weight] of items) counts.set(key, (counts.get(key) ?? 0) + weight);
@@ -146,12 +146,12 @@ function finishLine(runs: Run[]): Line {
 }
 
 /**
- * 同じ行の断片とみなす、横方向の空きの上限（フォントサイズに対する倍率）。
- * 見出しの番号と題のあいだ（1em）はつなぎ、表の列のあいだ（1.2em 以上が普通）は分ける。
+ * The largest horizontal gap (as a multiple of the font size) across which fragments still count as one line.
+ * The gap between the number and the title of a heading (1em) is joined, and the gap between the columns of a table (usually 1.2em or more) is split.
  */
 const MAX_WORD_GAP = 1.15;
 
-/** run を行にまとめる。PDF の中での出現順を手がかりにし、あとで同じ高さの断片をつなぐ。 */
+/** Groups runs into lines. It goes by the order in which they appear in the PDF, and afterwards joins fragments at the same height. */
 export function buildLines(runs: Run[]): Line[] {
   const groups: Run[][] = [];
   let cur: Run[] | null = null;
@@ -162,7 +162,7 @@ export function buildLines(runs: Run[]): Line[] {
     if (cur) {
       const h = Math.max(size, run.size);
       const gap = run.x0 - right;
-      // 上付き・下付きは同じ行として扱う。大きく左へ戻る、または大きく離れるなら別の行。
+      // Superscripts and subscripts are treated as part of the same line. A run that jumps far back to the left, or lies far away, starts another line.
       if (Math.abs(run.baseline - baseline) <= 0.45 * h && gap > -0.5 * h && gap < MAX_WORD_GAP * h) {
         cur.push(run);
         if (run.size > size * 1.05) {
@@ -180,7 +180,7 @@ export function buildLines(runs: Run[]): Line[] {
     right = run.x1;
   }
 
-  // 数式などで出現順が前後すると 1 行が複数の断片に分かれるので、同じ高さで隣り合う断片をつなぐ。
+  // When the order of appearance is out of sequence, as in formulas, one line is split into several fragments, so adjacent fragments at the same height are joined.
   let lines = groups.map(finishLine);
   for (let merged = true; merged; ) {
     merged = false;
@@ -218,7 +218,7 @@ function markTabular(lines: Line[], page: PageSize): void {
   }
 }
 
-/** ページの標準的な行送り（フォントサイズに対する倍率）を推定する。 */
+/** Estimates the usual line pitch of the page (as a multiple of the font size). */
 function leadingRatio(lines: Line[]): number {
   const ratios: number[] = [];
   for (let i = 0; i + 1 < lines.length; i++) {
@@ -239,7 +239,7 @@ interface Draft {
   size: number;
   font: string;
   pitch: number;
-  /** 2 行目以降の左端 */
+  /** The left edge of the second and later lines */
   bodyLeft: number;
   centered: boolean;
   tabular: boolean;
@@ -248,8 +248,8 @@ interface Draft {
 const center = (l: { x0: number; x1: number }) => (l.x0 + l.x1) / 2;
 
 /**
- * 2 行が中央揃えの関係にあるか。左端も右端もずれていて、中心がそろっていることを条件にする。
- * 右端を見ないと、字下げ幅の小さい段落（1 行目だけ左端が右へ寄る）を中央揃えと取り違える。
+ * Whether two lines are centered on each other. The condition is that both the left edges and the right edges differ while the centers line up.
+ * Without the check of the right edges, a paragraph with a small indent (only the left edge of its first line is shifted right) would be mistaken for centered text.
  */
 function isCenteredPair(a: Line, b: Line, em: number): boolean {
   return Math.abs(center(a) - center(b)) < 0.6 * em && Math.abs(a.x0 - b.x0) > 0.7 * em && Math.abs(a.x1 - b.x1) > 0.7 * em;
@@ -268,7 +268,7 @@ function canMerge(draft: Draft, line: Line, dy: number, leading: number, fonts: 
     if (dy > draft.pitch * 1.25 + 0.5 || dy < draft.pitch * 0.7) return false;
   } else {
     if (dy > leading * em * 1.35 || dy < 0.7 * em) return false;
-    // 太字の見出しのすぐ下に本文が続く場合は分ける。
+    // When body text follows right below a bold heading, the two are kept apart.
     const a = fonts.get(draft.font);
     const b = fonts.get(line.font);
     if (a && b && a.bold !== b.bold) return false;
@@ -277,12 +277,12 @@ function canMerge(draft: Draft, line: Line, dy: number, leading: number, fonts: 
   const centeredPair = isCenteredPair(last, line, em);
   if (n >= 2) {
     if (draft.centered) return Math.abs(center(last) - center(line)) < 0.6 * em;
-    // 字下げ（新しい段落）や字上げ（新しい箇条書きの項目）なら別のブロックにする。
+    // An indent (a new paragraph) or an outdent (a new list item) starts another block.
     return Math.abs(line.x0 - draft.bodyLeft) <= 0.7 * em;
   }
   if (centeredPair) return true;
   if (line.x0 > last.x0 + 0.7 * em) {
-    // 2 行目が右へずれている。ぶら下げインデントなら 1 行目は右端まで届いているはず。
+    // The second line is shifted to the right. If this is a hanging indent, the first line should reach the right edge.
     return last.x1 >= line.x1 - 2 * em;
   }
   return true;
@@ -294,7 +294,7 @@ function joinLines(lines: Line[]): string {
     if (!out) {
       out = line.text;
     } else if (/(?:^|[\s(“"])[A-Za-z]+-$/.test(out) && /^[a-z]/.test(line.text)) {
-      // 行末のハイフンで分かれた単語をつなぐ（複合語のハイフンは残す）。
+      // A word split by a hyphen at the end of a line is joined (the hyphen of a compound word stays).
       out = out.slice(0, -1) + line.text;
     } else {
       out += " " + line.text;
@@ -309,8 +309,8 @@ function isTranslatable(text: string, lines: Line[], fonts: Map<string, FontInfo
   const visible = text.replace(/\s/g, "").length;
   if (letters < 0.5 * visible) return false;
 
-  // 別行立ての数式は訳さない。語が少なく、数式用フォントの文字が目立つブロックを数式とみなす
-  // （本文中に数式が混ざる段落は、語が多いのでここには当たらない）。
+  // Display equations are not translated. A block with few words and a noticeable share of characters in a math font counts as an equation
+  // (a paragraph with formulas mixed into its text has many words, so it does not match here).
   let total = 0;
   let math = 0;
   for (const line of lines) {
@@ -324,7 +324,7 @@ function isTranslatable(text: string, lines: Line[], fonts: Map<string, FontInfo
   return !(words < 8 && total > 0 && math >= 0.15 * total);
 }
 
-/** 表のセルの揃え方を、同じ列（上下に並ぶセル）と左端・右端・中心のどれがそろっているかで決める。 */
+/** Decides the alignment of a table cell by which of its left edge, right edge and center lines up with the cells of the same column (those above and below it). */
 function columnAlign(block: Block, blocks: Block[]): Align {
   const tolerance = 0.25 * block.size;
   let left = 0;
@@ -342,7 +342,7 @@ function columnAlign(block: Block, blocks: Block[]): Align {
   return right >= middle ? "right" : "center";
 }
 
-/** 行ごとに、隣の（別のブロックの）行を削らない範囲で、消す矩形を広げる。 */
+/** For each line, widens the rectangle to erase as far as it can go without cutting into the neighboring lines (those of other blocks). */
 function computeEraseRects(blocks: Block[]): void {
   const all = blocks.flatMap((block) => block.lines.map((line) => ({ line, block })));
   for (const { line, block } of all) {
@@ -370,7 +370,7 @@ function computeEraseRects(blocks: Block[]): void {
   }
 }
 
-/** 1 ページ分の run をブロックにまとめる。 */
+/** Groups the runs of one page into blocks. */
 export function segmentPage(runs: Run[], fonts: Map<string, FontInfo>, page: PageSize, pageNumber: number): Block[] {
   const lines = buildLines(runs);
   markTabular(lines, page);
@@ -458,9 +458,9 @@ export function segmentPage(runs: Run[], fonts: Map<string, FontInfo>, page: Pag
 
     if (block.lines.length >= 2) continue;
 
-    // 1 行のブロックは、同じ段の本文（2 行以上のブロック）の幅を「置いてよい範囲」とみなす。
-    // 近くにあるもののうち、いちばん幅の狭いものを選ぶ。こうしないと、段組みの中の 1 行が、
-    // 上にある段抜きのブロック（概要など）の幅を借りてしまい、隣の段へはみ出す。
+    // For a one-line block, the width of the body text in the same column (a block of two or more lines) is taken as the range in which it may be placed.
+    // Of the nearby ones, the narrowest is chosen. Otherwise a single line inside a multi-column layout
+    // would borrow the width of a block above it that spans the columns (such as the abstract), and spill into the next column.
     const candidates: { other: Block; distance: number; width: number }[] = [];
     for (const other of blocks) {
       if (other === block || other.lines.length < 2) continue;
@@ -476,7 +476,7 @@ export function segmentPage(runs: Run[], fonts: Map<string, FontInfo>, page: Pag
     let right = region ? Math.max(region.x1, block.x1) : Math.max(textRight, block.x1);
     for (const other of blocks) {
       if (other === block || overlap(block.y0, block.y1, other.y0, other.y1) <= 0) continue;
-      // 横に並ぶブロックとの空きは半分ずつ分け合う（表の隣り合うセルの訳文がぶつからないように）。
+      // The gap to a block alongside is shared half and half (so that the translations of adjacent table cells do not collide).
       if (other.x0 >= block.x1 - 1) right = Math.min(right, (block.x1 + other.x0) / 2 - 0.15 * em);
       if (other.x1 <= block.x0 + 1) left = Math.max(left, (other.x1 + block.x0) / 2 + 0.15 * em);
     }
@@ -484,7 +484,7 @@ export function segmentPage(runs: Run[], fonts: Map<string, FontInfo>, page: Pag
     block.regionRight = Math.max(right, block.x1);
 
     if (block.lines[0].tabular) {
-      // 表のセルは、上下に並ぶセルと端がそろっている側に揃える。
+      // A table cell is aligned to the side on which its edge lines up with the cells above and below.
       block.align = columnAlign(block, blocks);
       continue;
     }

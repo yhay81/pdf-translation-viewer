@@ -1,10 +1,11 @@
-// 翻訳に使うモデルの選択。vscode.lm が返すモデル（Copilot と、VS Code に登録した BYOK のモデル）から選ぶ。
+// The choice of the model to translate with, among the models that vscode.lm offers: GitHub Copilot
+// and the other language models registered in VS Code.
 import * as vscode from "vscode";
 import { MockBackend, VscodeLmBackend, type TranslationBackend } from "./backends";
 
 type StoredChoice = { kind: "mock" } | { kind: "vscode-lm"; id: string; vendor: string; name: string };
 
-const STATE_KEY = "bilingualPdf.model";
+const STATE_KEY = "pdfTranslation.model";
 
 interface ModelItem extends vscode.QuickPickItem {
   choice: StoredChoice;
@@ -19,53 +20,61 @@ export class ModelRegistry {
     private readonly log: vscode.LogOutputChannel,
   ) {}
 
-  /** 結合テストなどで、モデルを呼ばないダミーに固定する。 */
+  /** The end-to-end test fixes the backend to the dummy, so that it calls no model. */
   private get forcedMock(): boolean {
-    return process.env.BILINGUAL_PDF_BACKEND === "mock";
+    return process.env.PDF_TRANSLATION_BACKEND === "mock";
+  }
+
+  /** The dummy is offered only while developing the extension, never in an installed one. */
+  private get offersMock(): boolean {
+    return this.context.extensionMode !== vscode.ExtensionMode.Production;
   }
 
   private get stored(): StoredChoice | undefined {
-    return this.context.globalState.get<StoredChoice>(STATE_KEY);
+    const stored = this.context.globalState.get<StoredChoice>(STATE_KEY);
+    return stored?.kind === "mock" && !this.offersMock ? undefined : stored;
   }
 
-  /** ツールバーに出す、選択中のモデルの名前。 */
+  /** The name of the chosen model, for the toolbar. */
   get label(): string | null {
     if (this.forcedMock) return new MockBackend().label;
     const stored = this.stored;
     if (!stored) return null;
-    return stored.kind === "mock" ? new MockBackend().label : `${stored.name}（${stored.vendor}）`;
+    return stored.kind === "mock" ? new MockBackend().label : `${stored.name} (${stored.vendor})`;
   }
 
   async list(): Promise<vscode.LanguageModelChat[]> {
     try {
-      // 絞り込みなしで呼ぶと、この拡張から使えるすべてのモデルが返る。
+      // Without a selector, this returns every model the extension may use.
       return await vscode.lm.selectChatModels();
     } catch (err) {
-      this.log.warn(`モデルの一覧を取得できませんでした: ${err instanceof Error ? err.message : String(err)}`);
+      this.log.warn(`Could not list the language models: ${err instanceof Error ? err.message : String(err)}`);
       return [];
     }
   }
 
-  /** 一覧から選ばせて保存する。キャンセルされたら undefined。 */
+  /** Lets the user choose from the list and stores the choice. Returns undefined when cancelled. */
   async pick(): Promise<TranslationBackend | undefined> {
     const models = await this.list();
     const items: ModelItem[] = models.map((model) => ({
       label: model.name,
       description: `${model.vendor} · ${model.family}`,
-      detail: `id: ${model.id} ／ 入力上限 ${model.maxInputTokens.toLocaleString()} トークン`,
+      detail: vscode.l10n.t("ID: {0} · up to {1} input tokens", model.id, model.maxInputTokens.toLocaleString()),
       choice: { kind: "vscode-lm", id: model.id, vendor: model.vendor, name: model.name },
     }));
-    items.push({
-      label: "ダミー翻訳（検証用）",
-      description: "モデルを呼ばず、表示だけを確かめる",
-      choice: { kind: "mock" },
-    });
+    if (this.offersMock) {
+      items.push({
+        label: vscode.l10n.t("Dummy translation (for development)"),
+        description: vscode.l10n.t("Lays out placeholder text without calling a model"),
+        choice: { kind: "mock" },
+      });
+    }
     const picked = await vscode.window.showQuickPick(items, {
-      title: "翻訳に使うモデル",
+      title: vscode.l10n.t("Model to Translate With"),
       placeHolder:
         models.length > 0
-          ? "モデルを選んでください"
-          : "使えるモデルが見つかりません。Copilot にサインインするか、VS Code の「言語モデルの管理」でモデルを追加してください",
+          ? vscode.l10n.t("Choose a model")
+          : vscode.l10n.t("No language model is available. Sign in to GitHub Copilot, or add a model to VS Code from the model picker of the Chat view."),
       matchOnDescription: true,
     });
     if (!picked) return undefined;
@@ -74,7 +83,7 @@ export class ModelRegistry {
     return this.resolve(false);
   }
 
-  /** 保存してある選択から呼び出し先を作る。未選択で interactive なら、その場で選ばせる。 */
+  /** Makes the backend for the stored choice. When there is none and interactive is set, asks the user. */
   async resolve(interactive: boolean): Promise<TranslationBackend | undefined> {
     if (this.forcedMock) return new MockBackend();
     const stored = this.stored;
@@ -82,7 +91,7 @@ export class ModelRegistry {
     if (stored?.kind === "vscode-lm") {
       const [model] = await vscode.lm.selectChatModels({ vendor: stored.vendor, id: stored.id });
       if (model) return new VscodeLmBackend(model);
-      this.log.warn(`保存してあったモデル ${stored.name}（${stored.vendor}）が見つかりません。`);
+      this.log.warn(`The stored model ${stored.name} (${stored.vendor}) is no longer available.`);
     }
     return interactive ? this.pick() : undefined;
   }

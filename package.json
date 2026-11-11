@@ -1,30 +1,66 @@
 {
-  "name": "bilingual-pdf-viewer",
-  "displayName": "Bilingual PDF Viewer (spike)",
-  "description": "PDF を左右に並べ、右側にレイアウトを保った日本語訳を重ねて表示する検証用プロトタイプ",
-  "version": "0.0.1",
-  "private": true,
-  "publisher": "local-spike",
-  "license": "UNLICENSED",
+  "name": "pdf-translation-viewer",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.1.0",
+  "preview": true,
+  "publisher": "yhay81",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.104.0"
   },
   "categories": [
-    "Other"
+    "Visualization",
+    "AI"
   ],
+  "keywords": [
+    "pdf",
+    "pdf viewer",
+    "translation",
+    "translate",
+    "translator",
+    "bilingual",
+    "side-by-side",
+    "layout",
+    "paper",
+    "japanese",
+    "llm",
+    "ai",
+    "copilot",
+    "language model",
+    "pdf.js"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#8C1D2B",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yhay81/pdf-translation-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yhay81/pdf-translation-viewer/issues"
+  },
+  "homepage": "https://github.com/yhay81/pdf-translation-viewer#readme",
   "main": "./dist/extension.js",
+  "l10n": "./l10n",
   "activationEvents": [],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces%",
+      "restrictedConfigurations": [
+        "pdfTranslation.targetLanguage"
+      ]
     },
     "virtualWorkspaces": true
   },
   "contributes": {
     "customEditors": [
       {
-        "viewType": "bilingualPdf.viewer",
-        "displayName": "Bilingual PDF Viewer",
+        "viewType": "pdfTranslation.viewer",
+        "displayName": "%customEditor.displayName%",
         "selector": [
           {
             "filenamePattern": "*.pdf"
@@ -35,44 +71,65 @@
     ],
     "commands": [
       {
-        "command": "bilingualPdf.translateCurrentPage",
-        "title": "表示中のページを翻訳する",
-        "category": "Bilingual PDF"
+        "command": "pdfTranslation.translateCurrentPage",
+        "title": "%command.translateCurrentPage%",
+        "category": "%category%"
       },
       {
-        "command": "bilingualPdf.selectModel",
-        "title": "翻訳に使うモデルを選ぶ",
-        "category": "Bilingual PDF"
+        "command": "pdfTranslation.selectModel",
+        "title": "%command.selectModel%",
+        "category": "%category%"
       },
       {
-        "command": "bilingualPdf.listModels",
-        "title": "利用できるモデルを一覧表示する",
-        "category": "Bilingual PDF"
+        "command": "pdfTranslation.listModels",
+        "title": "%command.listModels%",
+        "category": "%category%"
       },
       {
-        "command": "bilingualPdf.clearCache",
-        "title": "翻訳キャッシュを消す",
-        "category": "Bilingual PDF"
+        "command": "pdfTranslation.clearCache",
+        "title": "%command.clearCache%",
+        "category": "%category%"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "pdfTranslation.translateCurrentPage",
+          "when": "activeCustomEditorId == 'pdfTranslation.viewer'"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "PDF Translation Viewer",
+      "properties": {
+        "pdfTranslation.targetLanguage": {
+          "type": "string",
+          "default": "Japanese",
+          "markdownDescription": "%config.targetLanguage%"
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node esbuild.mjs --tests && node --test dist/test/unit.test.cjs",
-    "test:vscode": "node esbuild.mjs --tests && node test/vscode/runTest.mjs",
+    "test": "node esbuild.mjs --tests && node --test dist/test/unit.test.cjs",
+    "check": "npm run typecheck && npm test",
+    "test:e2e": "node esbuild.mjs --tests && node test/e2e/runTest.mjs",
+    "package": "vsce package --no-dependencies",
+    "vscode:prepublish": "node esbuild.mjs --production",
     "sample": "node samples/build.mjs",
     "harness": "node harness/server.mjs"
-  },
-  "dependencies": {
-    "pdfjs-dist": "6.5.438"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/vscode": "1.104.0",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.25.0",
+    "ovsx": "^1.4.0",
+    "pdfjs-dist": "6.5.438",
     "typescript": "^5.9.0"
   }
 }

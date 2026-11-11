@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: End-to-end test in VS Code
+        run: xvfb-run -a npm run test:e2e
+      - run: npm run package
+      # The same test again, on the files that the VSIX contains.
+      - name: End-to-end test of the package
+        run: |
+          unzip -q ./*.vsix -d "$RUNNER_TEMP/vsix"
+          PDF_TRANSLATION_EXTENSION="$RUNNER_TEMP/vsix/extension" xvfb-run -a npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsix
+          path: "*.vsix"
+          if-no-files-found: error
