@@ -17,6 +17,7 @@ export interface WebviewAssets {
 export type HostToWebview =
   | { type: "init"; fileName: string; data: Uint8Array; assets: WebviewAssets; modelLabel: string | null; targetLanguage: string }
   | { type: "modelChanged"; modelLabel: string | null }
+  | { type: "retryPage"; page: number }
   | { type: "targetLanguageChanged"; targetLanguage: string }
   | { type: "blockTranslated"; requestId: number; id: string; text: string; cached: boolean }
   | { type: "translateDone"; requestId: number; missing: string[]; modelLabel: string }

@@ -61,8 +61,8 @@ export async function run(): Promise<void> {
   assert.ok(translated.placed >= 20, `translations laid over the page: ${translated.placed}`);
   assert.equal(translated.inkRemoved, translated.placed, "the source text is gone under every translation");
 
-  const models = await vscode.commands.executeCommand<unknown[]>("pdfTranslation.listModels");
-  assert.ok(Array.isArray(models));
+  const models = await vscode.commands.executeCommand<{ id: string }[]>("pdfTranslation.listModels");
+  assert.ok(models.some((model) => model.id === "plamo-3.1-prime"), "PLaMo is listed even without a VS Code model or API key");
 
   const errors = reports.filter((report) => report.kind === "error");
   assert.deepEqual(errors, [], "no error and no CSP violation in the webview");

@@ -70,6 +70,7 @@ const state = {
   showBare: false,
   showBlocks: false,
   requestSeq: 0,
+  modelLabel: null as string | null,
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
 };
 
@@ -647,16 +648,13 @@ function onTranslateDone(message: Extract<HostToWebview, { type: "translateDone"
 
 function onTranslateError(message: Extract<HostToWebview, { type: "translateError" }>): void {
   const view = finishRequest(message.requestId);
-  if (view) view.request = null;
+  if (!view) return;
+  view.request = null;
   setStatus(t("translateFailed", message.message), true);
   report({ kind: "error", message: message.message });
 }
 
-/** When the target language changes, removes all the translations that are placed (the next translation is done in the new language). */
-function setTargetLanguage(language: string, announce: boolean): void {
-  if (language === state.targetLanguage) return;
-  state.targetLanguage = language;
-  translateButton.title = t("translatePageTitle", language);
+function clearTranslations(): void {
   for (const view of pages) {
     if (view.request) {
       post({ type: "cancel", requestId: view.request.id });
@@ -671,6 +669,13 @@ function setTargetLanguage(language: string, announce: boolean): void {
     view.highlight.style.display = "none";
     compose(view);
   }
+}
+
+function setTargetLanguage(language: string, announce: boolean): void {
+  if (language === state.targetLanguage) return;
+  state.targetLanguage = language;
+  translateButton.title = t("translatePageTitle", language);
+  clearTranslations();
   if (announce) setStatus(t("targetLanguageChanged", language));
 }
 
@@ -741,6 +746,12 @@ async function load(message: Extract<HostToWebview, { type: "init" }>): Promise<
 }
 
 function setModelLabel(label: string | null): void {
+  // The initial choice can be made while the first translation is waiting for the picker.
+  if (state.modelLabel && state.modelLabel !== label) {
+    clearTranslations();
+    setStatus(t("modelChanged", label ?? t("noModel")));
+  }
+  state.modelLabel = label;
   modelButton.textContent = t("model", label ?? t("noModel"));
 }
 
@@ -814,6 +825,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebview>) => {
     case "modelChanged":
       setModelLabel(message.modelLabel);
       break;
+    case "retryPage": {
+      const view = pages[message.page - 1];
+      if (view) void translate(view);
+      break;
+    }
     case "targetLanguageChanged":
       setTargetLanguage(message.targetLanguage, true);
       break;

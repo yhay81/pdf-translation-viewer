@@ -26,6 +26,7 @@ export const WEBVIEW_STRINGS = {
   noteClipped: "{0} cut short to fit",
   noteMissing: "{0} got no translation",
   targetLanguageChanged: "The target language is now {0}. Translate the page again.",
+  modelChanged: "The model is now {0}. Translate the page again.",
   translateFailed: "Translation failed: {0}",
   renderFailed: "Could not render page {0}",
   translateStartFailed: "Could not start translating page {0}",

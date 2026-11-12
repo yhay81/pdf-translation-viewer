@@ -1,10 +1,11 @@
 {
   "displayName": "PDF Translation Viewer",
-  "description": "View a PDF and its translation side by side, with the translation laid over the original layout. Translates with GitHub Copilot or another language model in VS Code.",
+  "description": "View a PDF and its translation side by side in the original layout. Translate with the PLaMo API, GitHub Copilot or another language model in VS Code.",
   "category": "PDF Translation",
   "customEditor.displayName": "PDF Translation Viewer",
   "command.translateCurrentPage": "Translate Current Page",
   "command.selectModel": "Choose Model",
+  "command.setPlamoApiKey": "Set PLaMo API Key",
   "command.listModels": "List Available Language Models",
   "command.clearCache": "Clear Translation Cache",
   "config.targetLanguage": "The language to translate into, named as you would name it to a translator, such as `Japanese`, `Simplified Chinese` or `Brazilian Portuguese`.",

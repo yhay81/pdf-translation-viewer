@@ -6,6 +6,7 @@ import { cleanTargetLanguage } from "./shared/language";
 import type { HostToWebview, WebviewReport, WebviewToHost } from "./shared/protocol";
 import { WEBVIEW_STRINGS } from "./shared/strings";
 import type { ModelRegistry } from "./translation/models";
+import { PlamoError } from "./translation/plamo";
 import type { TranslationService } from "./translation/service";
 
 class PdfDocument implements vscode.CustomDocument {
@@ -19,6 +20,21 @@ export interface ReportEvent {
 }
 
 function describeError(err: unknown): string {
+  if (err instanceof PlamoError) {
+    switch (err.reason) {
+      case 401:
+      case 403:
+        return vscode.l10n.t("PLaMo denied access (HTTP {0}). Check your key with the Set PLaMo API Key command and verify your account permissions.", err.reason);
+      case 429:
+        return vscode.l10n.t("PLaMo's usage limit was reached. Check your API quota and try again later.");
+      case "connection":
+        return vscode.l10n.t("The connection to PLaMo failed. Check your connection and try again.");
+      case "response":
+        return vscode.l10n.t("PLaMo returned an invalid or incomplete response. Try translating the page again.");
+      default:
+        return vscode.l10n.t("The PLaMo API request failed (HTTP {0}).", err.reason);
+    }
+  }
   if (err instanceof vscode.LanguageModelError) {
     switch (err.code) {
       case vscode.LanguageModelError.NoPermissions.name:
@@ -111,9 +127,17 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
           const source = new vscode.CancellationTokenSource();
           requests.set(message.requestId, source);
           try {
-            const backend = await this.models.resolve(true);
+            const previousModel = this.models.label;
+            const backend = await this.models.resolve();
+            if (source.token.isCancellationRequested) break;
             if (!backend) {
               send({ type: "translateError", requestId: message.requestId, message: vscode.l10n.t("No model is chosen.") });
+              break;
+            }
+            // Replacing an unavailable model clears the webview's old translations. Ask for its
+            // full set of blocks again before sending any of the old request to the new model.
+            if (previousModel !== null && previousModel !== this.models.label) {
+              send({ type: "retryPage", page: message.page });
               break;
             }
             const { missing } = await this.service.translate(

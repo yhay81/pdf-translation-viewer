@@ -2,7 +2,7 @@
 
 [日本語](README.ja.md)
 
-Read a PDF with its translation beside it, in the same layout. The left pane shows the page as it is. The right pane shows the same page with its text replaced by the translation, so figures, tables, equations and colored backgrounds stay exactly where they are. Translation uses **GitHub Copilot** or another language model in VS Code, so there is no API key to set up.
+Read a PDF with its translation beside it, in the same layout. The left pane shows the page as it is. The right pane shows the same page with its text replaced by the translation, so figures, tables, equations and colored backgrounds stay exactly where they are. Translate with the **PLaMo API**, **GitHub Copilot** or another language model in VS Code.
 
 ![A two-column paper in English on the left, and the same page in Japanese on the right. The tinted abstract, the equation and the dark note box are where they were.](images/screenshot.png)
 
@@ -22,16 +22,22 @@ This is a preview release. See [Limitations](#limitations) for what it does not 
 
 ## Getting started
 
-You need VS Code 1.104 or later, and GitHub Copilot or another extension that provides language models to VS Code.
+You need VS Code 1.104 or later and either a PLaMo API key or a language model in VS Code, such as GitHub Copilot.
 
 1. Install **PDF Translation Viewer** from the Visual Studio Marketplace.
 2. Open a PDF file. If another PDF extension opens it instead, right-click the file's tab, choose **Reopen Editor With...**, and pick **PDF Translation Viewer**. From the same list you can make it the default editor for PDF files.
 3. Click **Translate this page** in the toolbar.
-4. The first time, choose a model from the list, and allow the extension to use language models when VS Code asks.
+4. The first time, choose a model from the list. For **PLaMo 3.1 Prime**, enter your PLaMo API key when prompted. For a VS Code model, grant access when VS Code asks.
 
 The translation appears on the right, block by block. Scroll to another page and click **Translate this page** again to translate it.
 
 To change the model, click **Model: …** in the toolbar, or run **PDF Translation: Choose Model** from the Command Palette. To translate into another language, set `pdfTranslation.targetLanguage`, for example to `Simplified Chinese` or `Brazilian Portuguese`.
+
+### PLaMo API key
+
+Create a key on the profile page of the PLaMo API console. When you enter it in the viewer, VS Code saves it in secret storage for future translations. [PLaMo's guide to issuing a key](https://docs.plamo.preferredai.jp/en/getting-started)
+
+Run **PDF Translation: Set PLaMo API Key** to replace the key. Submit an empty field to remove a saved key. When there is no saved key, the extension also accepts the `PLAMO_API_KEY` environment variable from the process that started VS Code.
 
 ## Commands
 
@@ -39,7 +45,8 @@ To change the model, click **Model: …** in the toolbar, or run **PDF Translati
 | --- | --- |
 | **PDF Translation: Translate Current Page** | Translates the page on screen. The same as the toolbar button. |
 | **PDF Translation: Choose Model** | Chooses the language model to translate with. |
-| **PDF Translation: List Available Language Models** | Writes the models that VS Code offers to this extension to the **PDF Translation Viewer** output channel. |
+| **PDF Translation: Set PLaMo API Key** | Saves, replaces or removes a PLaMo API key. |
+| **PDF Translation: List Available Language Models** | Lists PLaMo and the models provided by VS Code in the **PDF Translation Viewer** output channel. |
 | **PDF Translation: Clear Translation Cache** | Deletes the cached translations. |
 
 ## Settings
@@ -64,7 +71,7 @@ A PDF page is a list of drawing operators. The viewer renders each page twice wi
 
 ## Privacy
 
-When you translate a page, the text of that page is sent to the model you chose, through the Language Model API of VS Code and under the terms of that model's provider. The extension sends nothing else and collects no telemetry. Translations are cached in the extension's storage on your computer; **PDF Translation: Clear Translation Cache** deletes them.
+When you translate a page, the extension sends text extracted from that page to the model you chose. Selecting PLaMo sends the text directly to the PLaMo API at Preferred Networks. VS Code models receive it through the VS Code Language Model API. The terms of the selected provider apply. The extension collects no telemetry. Translations are cached in the extension's storage on your computer. **PDF Translation: Clear Translation Cache** deletes them.
 
 ## Feedback
 

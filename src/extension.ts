@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { PdfEditorProvider, type ReportEvent } from "./pdfEditorProvider";
 import { TranslationCache } from "./translation/cache";
 import { ModelRegistry } from "./translation/models";
+import { PLAMO_MODEL } from "./translation/plamo";
 import { TranslationService } from "./translation/service";
 
 /** What the end-to-end test uses. */
@@ -32,19 +33,22 @@ export function activate(context: vscode.ExtensionContext): PdfTranslationApi {
         void vscode.window.showInformationMessage(vscode.l10n.t("Open a PDF in PDF Translation Viewer first."));
       }
     }),
-    vscode.commands.registerCommand("pdfTranslation.selectModel", () => models.pick()),
+    vscode.commands.registerCommand("pdfTranslation.selectModel", async () => {
+      await models.pick();
+    }),
+    vscode.commands.registerCommand("pdfTranslation.setPlamoApiKey", () => models.setPlamoApiKey()),
     vscode.commands.registerCommand("pdfTranslation.listModels", async () => {
-      const list = await models.list();
+      const vscodeModels = await models.listVscodeModels();
+      const list = [...vscodeModels, PLAMO_MODEL];
       log.info(`Language models available to this extension: ${list.length}`);
       for (const model of list) {
-        log.info(`  vendor=${model.vendor}  family=${model.family}  name=${model.name}  id=${model.id}  maxInputTokens=${model.maxInputTokens}`);
+        const detail = "maxInputTokens" in model ? `maxInputTokens=${model.maxInputTokens}` : "direct API (PLaMo API key required)";
+        log.info(`  vendor=${model.vendor}  family=${model.family}  name=${model.name}  id=${model.id}  ${detail}`);
       }
-      const vendors = [...new Set(list.map((model) => model.vendor))];
-      log.info(
-        vendors.length === 0
-          ? "No model was returned. Check that you are signed in to GitHub Copilot, and the settings of your organization."
-          : `Vendors: ${vendors.join(", ")}`,
-      );
+      log.info(`Vendors: ${[...new Set(list.map((model) => model.vendor))].join(", ")}`);
+      if (vscodeModels.length === 0) {
+        log.info("No VS Code language models were returned. To use GitHub Copilot, check your sign-in and organization settings.");
+      }
       log.show(true);
       return list.map((model) => ({ vendor: model.vendor, family: model.family, name: model.name, id: model.id }));
     }),

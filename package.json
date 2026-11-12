@@ -2,7 +2,7 @@
   "name": "pdf-translation-viewer",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "preview": true,
   "publisher": "yhay81",
   "license": "MIT",
@@ -78,6 +78,11 @@
       {
         "command": "pdfTranslation.selectModel",
         "title": "%command.selectModel%",
+        "category": "%category%"
+      },
+      {
+        "command": "pdfTranslation.setPlamoApiKey",
+        "title": "%command.setPlamoApiKey%",
         "category": "%category%"
       },
       {

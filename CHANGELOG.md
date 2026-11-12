@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- Choose **PLaMo 3.1 Prime** in the model picker to translate a PDF page with the PLaMo API. Enter your key once in VS Code or start VS Code with `PLAMO_API_KEY` set.
+- Switch models and translate the same page again. Previously cached translations are reused when you return to a model.
+
 ## 0.1.0
 
 The first release, as a preview.

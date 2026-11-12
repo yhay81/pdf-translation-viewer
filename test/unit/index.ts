@@ -7,6 +7,7 @@ import { cleanTargetLanguage, isLeftUntranslated, languageTag } from "../../src/
 import { WEBVIEW_STRINGS, format } from "../../src/shared/strings";
 import { BlockStreamParser, buildPrompt, chunkBlocks } from "../../src/translation/blockProtocol";
 import { buildLines, segmentPage, type FontInfo, type Run } from "../../src/webview/layout";
+import "./plamo";
 
 // ---------------------------------------------------------------- The translation exchange
 

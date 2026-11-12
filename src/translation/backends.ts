@@ -1,6 +1,4 @@
-// Where translations come from: the VS Code Language Model API (GitHub Copilot and the other
-// models registered in VS Code), and a dummy for development and tests that calls no model.
-// A backend that talks to a provider directly with its own API key would take the same shape.
+// The interface shared by VS Code language models, the direct PLaMo API and the development dummy.
 import * as vscode from "vscode";
 import type { SourceBlock } from "../shared/protocol";
 import { buildPrompt } from "./blockProtocol";
