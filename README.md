@@ -25,7 +25,7 @@ This is a preview release. See [Limitations](#limitations) for what it does not 
 You need VS Code 1.104 or later, and GitHub Copilot or another extension that provides language models to VS Code.
 
 1. Install **PDF Translation Viewer** from the Visual Studio Marketplace.
-2. Open a PDF file. If another PDF extension opens it instead, right-click the file's tab, choose **Reopen Editor With...**, and pick **PDF Translation Viewer**.
+2. Open a PDF file. If another PDF extension opens it instead, right-click the file's tab, choose **Reopen Editor With...**, and pick **PDF Translation Viewer**. From the same list you can make it the default editor for PDF files.
 3. Click **Translate this page** in the toolbar.
 4. The first time, choose a model from the list, and allow the extension to use language models when VS Code asks.
 

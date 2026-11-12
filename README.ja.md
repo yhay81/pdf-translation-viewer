@@ -25,7 +25,7 @@ PDF とその訳文を、同じレイアウトのまま左右に並べて読む�
 VS Code 1.104 以降と、GitHub Copilot、または VS Code に言語モデルを提供するほかの拡張が必要です。
 
 1. Visual Studio Marketplace から **PDF Translation Viewer** をインストールします。
-2. PDF ファイルを開きます。ほかの PDF 拡張で開いた場合は、ファイルのタブを右クリックして **エディターを再度開く...**（Reopen Editor With...）を選び、**PDF Translation Viewer** を選びます。
+2. PDF ファイルを開きます。ほかの PDF 拡張で開いた場合は、ファイルのタブを右クリックして **エディターを再度開く...**（Reopen Editor With...）を選び、**PDF Translation Viewer** を選びます。同じ一覧から、PDF ファイルの既定のエディターに設定することもできます。
 3. ツールバーの **このページを翻訳** をクリックします。
 4. 初回は、一覧からモデルを選びます。VS Code が言語モデルの利用について確認するので、許可します。
 
