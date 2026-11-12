@@ -7,6 +7,13 @@ type StoredChoice = { kind: "mock" } | { kind: "vscode-lm"; id: string; vendor: 
 
 const STATE_KEY = "pdfTranslation.model";
 
+/**
+ * Some extensions register entries that are not models to send a request to, such as a prompt to
+ * set the extension up. They report an input limit of 0 or 1 token. The list to choose from leaves
+ * out every entry whose limit is too small for even a short paragraph.
+ */
+const MIN_INPUT_TOKENS = 256;
+
 interface ModelItem extends vscode.QuickPickItem {
   choice: StoredChoice;
 }
@@ -55,7 +62,11 @@ export class ModelRegistry {
 
   /** Lets the user choose from the list and stores the choice. Returns undefined when cancelled. */
   async pick(): Promise<TranslationBackend | undefined> {
-    const models = await this.list();
+    const models: vscode.LanguageModelChat[] = [];
+    for (const model of await this.list()) {
+      if (model.maxInputTokens >= MIN_INPUT_TOKENS) models.push(model);
+      else this.log.info(`Not offered, because its input limit is ${model.maxInputTokens} tokens: ${model.name} (${model.vendor})`);
+    }
     const items: ModelItem[] = models.map((model) => ({
       label: model.name,
       description: `${model.vendor} · ${model.family}`,
