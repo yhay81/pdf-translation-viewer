@@ -130,6 +130,8 @@ document.body.append(toolbar, panes);
 
 function setStatus(text: string, isError = false): void {
   statusText.textContent = text;
+  // The toolbar cuts a long status short; pointing at it shows all of it.
+  statusText.title = text;
   statusText.classList.toggle("error", isError);
 }
 

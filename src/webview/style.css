@@ -73,7 +73,10 @@ body {
   color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
+/* An error is shown in full, on a row of its own. */
 #toolbar .status.error {
+  flex-basis: 100%;
+  white-space: normal;
   color: var(--vscode-errorForeground, #f48771);
 }
 
