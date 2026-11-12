@@ -1,9 +1,11 @@
-// 翻訳結果のキャッシュ。原文・モデル・プロンプトの版が同じなら、同じ訳文を使い回す。
+// The cache of translations. The same source text, model, target language and prompt version
+// give the same translation again without a request.
 import { createHash } from "node:crypto";
 import * as vscode from "vscode";
 import { PROMPT_VERSION } from "./blockProtocol";
 
-const TARGET_LANGUAGE = "ja";
+/** The oldest entries are dropped beyond this many. */
+const MAX_ENTRIES = 20_000;
 
 export class TranslationCache {
   private entries = new Map<string, string>();
@@ -22,24 +24,31 @@ export class TranslationCache {
         const raw = await vscode.workspace.fs.readFile(this.file);
         this.entries = new Map(Object.entries(JSON.parse(new TextDecoder().decode(raw)) as Record<string, string>));
       } catch {
-        // まだファイルがない、または壊れている場合は空から始める。
+        // No file yet, or a broken one: start empty.
       }
     })();
     return this.loaded;
   }
 
-  private key(backendId: string, source: string): string {
-    return createHash("sha256").update(JSON.stringify([PROMPT_VERSION, backendId, TARGET_LANGUAGE, source])).digest("hex").slice(0, 32);
+  private key(backendId: string, targetLanguage: string, source: string): string {
+    return createHash("sha256").update(JSON.stringify([PROMPT_VERSION, backendId, targetLanguage, source])).digest("hex").slice(0, 32);
   }
 
-  get(backendId: string, source: string): string | undefined {
-    return this.entries.get(this.key(backendId, source));
+  get(backendId: string, targetLanguage: string, source: string): string | undefined {
+    return this.entries.get(this.key(backendId, targetLanguage, source));
   }
 
-  set(backendId: string, source: string, translation: string): void {
-    this.entries.set(this.key(backendId, source), translation);
+  set(backendId: string, targetLanguage: string, source: string, translation: string): void {
+    const key = this.key(backendId, targetLanguage, source);
+    // A Map keeps insertion order, so re-inserting makes the entry the newest.
+    this.entries.delete(key);
+    this.entries.set(key, translation);
+    for (const oldest of this.entries.keys()) {
+      if (this.entries.size <= MAX_ENTRIES) break;
+      this.entries.delete(oldest);
+    }
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => void this.flush(), 1000);
+    this.saveTimer = setTimeout(() => void this.flush().catch(() => undefined), 1000);
   }
 
   get size(): number {

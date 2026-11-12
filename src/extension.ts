@@ -4,15 +4,15 @@ import { TranslationCache } from "./translation/cache";
 import { ModelRegistry } from "./translation/models";
 import { TranslationService } from "./translation/service";
 
-/** 結合テストから使う窓口。 */
-export interface BilingualPdfApi {
+/** What the end-to-end test uses. */
+export interface PdfTranslationApi {
   onReport: vscode.Event<ReportEvent>;
 }
 
 let cache: TranslationCache | undefined;
 
-export function activate(context: vscode.ExtensionContext): BilingualPdfApi {
-  const log = vscode.window.createOutputChannel("Bilingual PDF", { log: true });
+export function activate(context: vscode.ExtensionContext): PdfTranslationApi {
+  const log = vscode.window.createOutputChannel("PDF Translation Viewer", { log: true });
   cache = new TranslationCache(context.globalStorageUri);
   const models = new ModelRegistry(context, log);
   const service = new TranslationService(cache, log);
@@ -23,36 +23,36 @@ export function activate(context: vscode.ExtensionContext): BilingualPdfApi {
     models,
     provider,
     vscode.window.registerCustomEditorProvider(PdfEditorProvider.viewType, provider, {
-      // タブを切り替えても描画と訳文を保つ。
+      // Keeps the rendering and the translations when the tab is in the background.
       webviewOptions: { retainContextWhenHidden: true },
       supportsMultipleEditorsPerDocument: false,
     }),
-    vscode.commands.registerCommand("bilingualPdf.translateCurrentPage", () => {
+    vscode.commands.registerCommand("pdfTranslation.translateCurrentPage", () => {
       if (!provider.translateCurrentPage()) {
-        void vscode.window.showInformationMessage("Bilingual PDF Viewer で PDF を開いてから実行してください。");
+        void vscode.window.showInformationMessage(vscode.l10n.t("Open a PDF in PDF Translation Viewer first."));
       }
     }),
-    vscode.commands.registerCommand("bilingualPdf.selectModel", () => models.pick()),
-    vscode.commands.registerCommand("bilingualPdf.listModels", async () => {
+    vscode.commands.registerCommand("pdfTranslation.selectModel", () => models.pick()),
+    vscode.commands.registerCommand("pdfTranslation.listModels", async () => {
       const list = await models.list();
-      log.info(`利用できるモデル: ${list.length} 件`);
+      log.info(`Language models available to this extension: ${list.length}`);
       for (const model of list) {
         log.info(`  vendor=${model.vendor}  family=${model.family}  name=${model.name}  id=${model.id}  maxInputTokens=${model.maxInputTokens}`);
       }
       const vendors = [...new Set(list.map((model) => model.vendor))];
       log.info(
         vendors.length === 0
-          ? "モデルが 1 つも返りませんでした。Copilot へのサインインと、組織の設定を確認してください。"
-          : `vendor の内訳: ${vendors.join(", ")}（copilot 以外が並んでいれば、VS Code に登録した BYOK のモデルもこの API から使えます）`,
+          ? "No model was returned. Check that you are signed in to GitHub Copilot, and the settings of your organization."
+          : `Vendors: ${vendors.join(", ")}`,
       );
       log.show(true);
       return list.map((model) => ({ vendor: model.vendor, family: model.family, name: model.name, id: model.id }));
     }),
-    vscode.commands.registerCommand("bilingualPdf.clearCache", async () => {
+    vscode.commands.registerCommand("pdfTranslation.clearCache", async () => {
       await cache?.load();
       const count = cache?.size ?? 0;
       await cache?.clear();
-      void vscode.window.showInformationMessage(`翻訳キャッシュを消しました（${count} 件）。`);
+      void vscode.window.showInformationMessage(vscode.l10n.t("Cleared the translation cache ({0} entries).", count));
     }),
   );
 

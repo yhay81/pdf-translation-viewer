@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bilingual PDF Viewer（ブラウザ検証）</title>
+<title>PDF Translation Viewer (browser harness)</title>
 <link rel="stylesheet" href="/dist/webview/style.css">
 <style>
-  /* VS Code の外で見るので、テーマ変数の代わりに最低限の配色を与える。 */
+  /* The page is viewed outside VS Code, so it gets a minimal color scheme in place of the theme variables. */
   html, body { height: 100%; margin: 0; }
   body { font: 13px/1.4 -apple-system, "Hiragino Sans", sans-serif; }
 </style>
 </head>
 <body>
-<!-- 拡張ホストの代役。Webview のスクリプトより先に読み込む。 -->
+<!-- A stand-in for the extension host. It is loaded before the script of the webview. -->
 <script type="module" src="/harness/mock-host.js"></script>
 <script type="module" src="/dist/webview/main.js"></script>
 </body>

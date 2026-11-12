@@ -1,7 +1,10 @@
-// *.pdf を開く custom editor。Webview に PDF の中身を渡し、Webview からの翻訳依頼を翻訳サービスへつなぐ。
+// The custom editor that opens *.pdf. It hands the bytes of the PDF to the webview, and passes the
+// webview's translation requests on to the translation service.
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { cleanTargetLanguage } from "./shared/language";
 import type { HostToWebview, WebviewReport, WebviewToHost } from "./shared/protocol";
+import { WEBVIEW_STRINGS } from "./shared/strings";
 import type { ModelRegistry } from "./translation/models";
 import type { TranslationService } from "./translation/service";
 
@@ -19,23 +22,29 @@ function describeError(err: unknown): string {
   if (err instanceof vscode.LanguageModelError) {
     switch (err.code) {
       case vscode.LanguageModelError.NoPermissions.name:
-        return "このモデルを使う許可がありません。確認のダイアログで許可するか、組織の設定を確認してください。";
+        return vscode.l10n.t("This extension is not allowed to use the model. Allow it in the dialog that VS Code shows, or check the settings of your organization.");
       case vscode.LanguageModelError.Blocked.name:
-        return `リクエストが拒否されました（利用上限、またはコンテンツのフィルター）。${err.message}`;
+        return vscode.l10n.t("The request was blocked, by a usage limit or a content filter. {0}", err.message);
       case vscode.LanguageModelError.NotFound.name:
-        return "選んだモデルが見つかりません。モデルを選び直してください。";
+        return vscode.l10n.t("The chosen model was not found. Choose a model again.");
     }
   }
   return err instanceof Error ? err.message : String(err);
 }
 
+/** The language to translate into, from the setting pdfTranslation.targetLanguage. */
+function targetLanguage(): string {
+  return cleanTargetLanguage(vscode.workspace.getConfiguration("pdfTranslation").get("targetLanguage"));
+}
+
 export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<PdfDocument> {
-  static readonly viewType = "bilingualPdf.viewer";
+  static readonly viewType = "pdfTranslation.viewer";
 
   private readonly panels = new Set<vscode.WebviewPanel>();
   private readonly reported = new vscode.EventEmitter<ReportEvent>();
-  /** Webview からの進捗報告。結合テストで使う。 */
+  /** The progress reports of the webviews, for the end-to-end test. */
   readonly onReport = this.reported.event;
+  private readonly subscriptions: vscode.Disposable[] = [];
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -43,7 +52,14 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
     private readonly service: TranslationService,
     private readonly log: vscode.LogOutputChannel,
   ) {
-    models.onDidChange(() => this.broadcast({ type: "modelChanged", modelLabel: models.label }));
+    this.subscriptions.push(
+      models.onDidChange(() => this.broadcast({ type: "modelChanged", modelLabel: models.label })),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("pdfTranslation.targetLanguage")) {
+          this.broadcast({ type: "targetLanguageChanged", targetLanguage: targetLanguage() });
+        }
+      }),
+    );
   }
 
   openCustomDocument(uri: vscode.Uri): PdfDocument {
@@ -53,7 +69,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
   resolveCustomEditor(document: PdfDocument, panel: vscode.WebviewPanel): void {
     const webview = panel.webview;
     const assetRoot = vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview");
-    // PDF の中身はメッセージで渡すので、Webview に読ませるのは拡張自身の dist/webview だけでよい。
+    // The PDF itself goes to the webview in a message, so the webview only needs to read the extension's own dist/webview.
     webview.options = { enableScripts: true, localResourceRoots: [assetRoot] };
     const asset = (...segments: string[]) => webview.asWebviewUri(vscode.Uri.joinPath(assetRoot, ...segments)).toString();
 
@@ -73,8 +89,8 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
     webview.onDidReceiveMessage(async (message: WebviewToHost) => {
       switch (message.type) {
         case "ready": {
-          // readFile が返すのは Node の Buffer で、そのまま postMessage すると JSON（{ type: "Buffer", data: [...] }）に
-          // 変換されてしまう。素の Uint8Array に写せば、バイナリのまま Webview へ転送される。
+          // readFile returns a Node Buffer, which postMessage would turn into JSON ({ type: "Buffer", data: [...] }).
+          // Copied into a plain Uint8Array, it travels to the webview as binary.
           const data = new Uint8Array(await vscode.workspace.fs.readFile(document.uri));
           send({
             type: "init",
@@ -87,6 +103,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
               wasmUrl: asset("wasm") + "/",
             },
             modelLabel: this.models.label,
+            targetLanguage: targetLanguage(),
           });
           break;
         }
@@ -96,18 +113,19 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
           try {
             const backend = await this.models.resolve(true);
             if (!backend) {
-              send({ type: "translateError", requestId: message.requestId, message: "モデルが選ばれていません。" });
+              send({ type: "translateError", requestId: message.requestId, message: vscode.l10n.t("No model is chosen.") });
               break;
             }
             const { missing } = await this.service.translate(
               message.blocks,
               backend,
+              targetLanguage(),
               (id, text, cached) => send({ type: "blockTranslated", requestId: message.requestId, id, text, cached }),
               source.token,
             );
             send({ type: "translateDone", requestId: message.requestId, missing, modelLabel: backend.label });
           } catch (err) {
-            this.log.error(`翻訳に失敗しました（${message.page} ページ）`, err);
+            this.log.error(`Translating page ${message.page} failed`, err);
             send({ type: "translateError", requestId: message.requestId, message: describeError(err) });
           } finally {
             requests.delete(message.requestId);
@@ -131,7 +149,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
     webview.html = this.html(webview, assetRoot);
   }
 
-  /** 前面にあるビューアに「表示中のページを翻訳」を指示する。 */
+  /** Tells the viewer in front to translate the page on screen. */
   translateCurrentPage(): boolean {
     const active = [...this.panels].find((panel) => panel.active) ?? [...this.panels].find((panel) => panel.visible);
     if (!active) return false;
@@ -147,7 +165,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
     const script = webview.asWebviewUri(vscode.Uri.joinPath(assetRoot, "main.js"));
     const style = webview.asWebviewUri(vscode.Uri.joinPath(assetRoot, "style.css"));
     const source = webview.cspSource;
-    // blob: は PDF.js の Worker を起動するため、wasm-unsafe-eval は PDF.js の画像デコーダー（WASM）のために必要。
+    // blob: starts the PDF.js worker, and wasm-unsafe-eval runs the image decoders of PDF.js, which are WebAssembly.
     const csp = [
       "default-src 'none'",
       `script-src ${source} blob: 'wasm-unsafe-eval'`,
@@ -157,22 +175,28 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider<Pd
       `img-src ${source} data: blob:`,
       `connect-src ${source} data: blob:`,
     ].join("; ");
+    // The messages of the webview in the display language. As a JSON data block it is not run as a script,
+    // and < is escaped so that no text can close the element.
+    const strings = Object.fromEntries(Object.entries(WEBVIEW_STRINGS).map(([key, message]) => [key, vscode.l10n.t(message)]));
+    const l10n = JSON.stringify(strings).replace(/</g, "\\u003c");
     return `<!DOCTYPE html>
-<html lang="ja">
+<html lang="${vscode.env.language}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${style}">
-<title>Bilingual PDF Viewer</title>
+<title>PDF Translation Viewer</title>
 </head>
 <body>
+<script id="l10n" type="application/json">${l10n}</script>
 <script type="module" src="${script}"></script>
 </body>
 </html>`;
   }
 
   dispose(): void {
+    for (const subscription of this.subscriptions) subscription.dispose();
     this.reported.dispose();
   }
 }

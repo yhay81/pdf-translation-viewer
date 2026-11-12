@@ -1,8 +1,10 @@
-// Webview 本体。左に原本、右に「文字を抜いた背景 + 訳文」を並べて表示する。
+// The webview itself. It shows the original on the left and, beside it on the right, the background with its text removed plus the translation.
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport, RenderTask } from "pdfjs-dist";
+import { DEFAULT_TARGET_LANGUAGE, isLeftUntranslated, languageTag } from "../shared/language";
 import type { HostToWebview, WebviewReport, WebviewToHost } from "../shared/protocol";
 import { segmentPage, type Block, type FontInfo, type Run } from "./layout";
+import { t } from "./strings";
 import { BASE, placeBlock, type Placed } from "./typeset";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -11,7 +13,7 @@ const host = acquireVsCodeApi();
 const post = (message: WebviewToHost) => host.postMessage(message);
 const report = (event: WebviewReport) => post({ type: "report", event });
 
-/** 文字を描く命令。これだけを飛ばして描くと「文字なし」の背景になる。 */
+/** The operators that draw text. Rendering with only these skipped gives the text-free background. */
 const TEXT_OPS = new Set<number>([
   pdfjs.OPS.showText,
   pdfjs.OPS.showSpacedText,
@@ -19,36 +21,35 @@ const TEXT_OPS = new Set<number>([
   pdfjs.OPS.nextLineSetSpacingShowText,
 ]);
 
-const JAPANESE = /[぀-ヿ㐀-鿿]/;
 const ZOOM_STEP = 1.2;
 const PAGE_GAP = 12;
 
 interface SampledStyle {
   color: string;
   background: string;
-  /** 通常描画と文字なし描画に差があった（= 文字が実際に消えている） */
+  /** The normal rendering and the text-free rendering differed (= the text is really gone) */
   ink: boolean;
 }
 
 interface PageView {
   num: number;
-  /** ページの大きさ（pt） */
+  /** The size of the page (pt) */
   width: number;
   height: number;
   left: HTMLDivElement;
   right: HTMLDivElement;
-  /** 通常描画。左ペインにそのまま表示する */
+  /** The normal rendering. It is shown as it is in the left pane */
   full: HTMLCanvasElement;
-  /** 文字なし描画。画面には出さず、右ペインの合成に使う */
+  /** The text-free rendering. It is not shown on screen, and is used to compose the right pane */
   bare: HTMLCanvasElement | null;
-  /** 右ペインに表示する合成結果 */
+  /** The composed result shown in the right pane */
   composed: HTMLCanvasElement;
   textLayer: HTMLDivElement;
   debugLayer: HTMLDivElement;
   highlight: HTMLDivElement;
   badge: HTMLDivElement;
   page: PDFPageProxy | null;
-  /** full / bare を描いたときの倍率（デバイスピクセル / pt）。0 は未描画 */
+  /** The scale at which full / bare were rendered (device pixels / pt). 0 means not rendered yet */
   pixelScale: number;
   generation: number;
   tasks: Set<RenderTask>;
@@ -69,6 +70,7 @@ const state = {
   showBare: false,
   showBlocks: false,
   requestSeq: 0,
+  targetLanguage: DEFAULT_TARGET_LANGUAGE,
 };
 
 let doc: PDFDocumentProxy | null = null;
@@ -76,7 +78,7 @@ const pages: PageView[] = [];
 const requests = new Map<number, PageView>();
 let renderQueue: Promise<void> = Promise.resolve();
 
-// ---------------------------------------------------------------- 画面の骨組み
+// ---------------------------------------------------------------- The skeleton of the screen
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -91,23 +93,24 @@ const pageIndicator = el("span", "indicator", "– / –");
 const zoomOut = el("button", "", "−");
 const zoomLabel = el("span", "indicator", "100%");
 const zoomIn = el("button", "", "＋");
-const fitButton = el("button", "", "幅に合わせる");
-const translateButton = el("button", "primary", "このページを翻訳");
-const modelButton = el("button", "", "モデル: 未選択");
+const fitButton = el("button", "", t("fitWidth"));
+const translateButton = el("button", "primary", t("translatePage"));
+const modelButton = el("button", "", t("model", t("noModel")));
 const bareToggle = el("label", "toggle");
 const bareInput = el("input");
 bareInput.type = "checkbox";
-bareToggle.append(bareInput, "文字なし描画");
+bareToggle.append(bareInput, t("textFree"));
 const blocksToggle = el("label", "toggle");
 const blocksInput = el("input");
 blocksInput.type = "checkbox";
-blocksToggle.append(blocksInput, "ブロック枠");
+blocksToggle.append(blocksInput, t("blockOutlines"));
 const statusText = el("span", "status");
-zoomOut.title = "縮小";
-zoomIn.title = "拡大";
-modelButton.title = "翻訳に使うモデルを選ぶ";
-bareToggle.title = "右ペインの背景を、文字を描く命令だけ飛ばした描画に切り替える";
-blocksToggle.title = "翻訳の単位として検出したブロックを枠で示す";
+zoomOut.title = t("zoomOut");
+zoomIn.title = t("zoomIn");
+translateButton.title = t("translatePageTitle", state.targetLanguage);
+modelButton.title = t("modelTitle");
+bareToggle.title = t("textFreeTitle");
+blocksToggle.title = t("blockOutlinesTitle");
 toolbar.append(pageIndicator, zoomOut, zoomLabel, zoomIn, fitButton, translateButton, modelButton, bareToggle, blocksToggle, statusText);
 
 const panes = el("div");
@@ -120,13 +123,15 @@ function makePane(label: string): { pane: HTMLDivElement; list: HTMLDivElement }
   pane.append(tag, list);
   return { pane, list };
 }
-const leftPane = makePane("原文");
-const rightPane = makePane("訳文");
+const leftPane = makePane(t("source"));
+const rightPane = makePane(t("translation"));
 panes.append(leftPane.pane, rightPane.pane);
 document.body.append(toolbar, panes);
 
 function setStatus(text: string, isError = false): void {
   statusText.textContent = text;
+  // The toolbar cuts a long status short; pointing at it shows all of it.
+  statusText.title = text;
   statusText.classList.toggle("error", isError);
 }
 
@@ -137,7 +142,7 @@ function fail(context: string, err: unknown): void {
   report({ kind: "error", message });
 }
 
-// ---------------------------------------------------------------- ページの生成と大きさ
+// ---------------------------------------------------------------- Creating and sizing the pages
 
 function makeLayer(parent: HTMLElement, className: string): HTMLDivElement {
   const layer = el("div", `layer ${className}`);
@@ -239,14 +244,14 @@ function scheduleRender(): void {
   }, 120);
 }
 
-// ---------------------------------------------------------------- 描画
+// ---------------------------------------------------------------- Rendering
 
 function cancelTasks(view: PageView): void {
   for (const task of view.tasks) task.cancel();
   view.tasks.clear();
 }
 
-/** 1 ページを新しいキャンバスに描く。withoutText なら文字を描く命令だけ飛ばす。 */
+/** Renders one page onto a new canvas. With withoutText, only the operators that draw text are skipped. */
 async function draw(view: PageView, page: PDFPageProxy, viewport: PageViewport, withoutText: boolean): Promise<HTMLCanvasElement | null> {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
@@ -304,10 +309,10 @@ async function render(view: PageView): Promise<void> {
 function enqueueRender(view: PageView): void {
   renderQueue = renderQueue
     .then(() => (view.visible && view.pixelScale !== targetPixelScale() ? render(view) : undefined))
-    .catch((err) => fail(`${view.num} ページの描画に失敗しました`, err));
+    .catch((err) => fail(t("renderFailed", view.num), err));
 }
 
-/** 文字なし描画がまだなければ、いまの倍率で用意する。 */
+/** Prepares the text-free rendering at the current scale if there is none yet. */
 async function ensureBare(view: PageView): Promise<void> {
   if (view.bare || !view.page || view.pixelScale === 0) return;
   const generation = view.generation;
@@ -325,7 +330,7 @@ function release(view: PageView): void {
   view.pixelScale = 0;
 }
 
-/** 右ペインの画像を作る。通常描画を写し、訳し終えたブロックの行だけ文字なし描画で上書きする。 */
+/** Makes the image of the right pane. It copies the normal rendering, and overwrites only the lines of the blocks already translated with the text-free rendering. */
 function compose(view: PageView): void {
   if (view.pixelScale === 0) return;
   const { full, bare, composed } = view;
@@ -357,7 +362,7 @@ function erase(ctx: CanvasRenderingContext2D, view: PageView, bare: HTMLCanvasEl
   }
 }
 
-// ---------------------------------------------------------------- 文字の抽出とブロック化
+// ---------------------------------------------------------------- Extracting the text and forming blocks
 
 function clamp(value: number | undefined, min: number, max: number, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value !== 0 ? Math.min(max, Math.max(min, value)) : fallback;
@@ -370,11 +375,10 @@ const SANS_NAME = /sans|helvet|arial|gothic|cmss|lmss|verdana|tahoma|calibri|seg
 const SERIF_NAME =
   /times|roman|serif|georgia|garamond|palatino|minion|cambria|cmr\d|cmbx|cmti|cmsl|cmcsc|lmr|nimbusrom|utopia|charter|bookman|century|schoolbook|sfrm|sfbx|sfti|baskerville|caslon|didot|stix|libertin|termes|pagella|ptm|mincho/i;
 
-/** 原文のフォントの系統（明朝系か、太字か、等幅か）を、フォント名と PDF.js の判定から推定する。 */
 const MATH_NAME = /math|cmmi|cmsy|cmex|msam|msbm|eusm|eufm|rsfs|symbol|mtsy|mtex|rmtmi/i;
 
 interface PdfFont {
-  /** PostScript 名。getDocument に fontExtraProperties: true を渡したときだけ入る。 */
+  /** The PostScript name. It is present only when fontExtraProperties: true is passed to getDocument. */
   name?: string;
   bold?: boolean;
   black?: boolean;
@@ -383,17 +387,18 @@ interface PdfFont {
   isSerifFont?: boolean;
 }
 
+/** Estimates the kind of font of the source (whether it is serif, bold or monospace) from the font name and from what PDF.js determined. */
 function describeFont(page: PDFPageProxy, fontName: string, family: string | undefined): FontInfo {
   let font: PdfFont = {};
   try {
     if (page.commonObjs.has(fontName)) font = (page.commonObjs.get(fontName) ?? {}) as PdfFont;
   } catch {
-    // フォントがまだ読み込まれていない場合は、PDF.js の判定だけを使う。
+    // When the font is not loaded yet, only what PDF.js determined is used.
   }
-  // 埋め込みフォントの名前の先頭に付く、サブセットの識別子（ABCDEF+）を外す。
+  // The subset tag (ABCDEF+) at the start of the name of an embedded font is removed.
   const name = String(font.name ?? "").replace(/^[A-Z]{6}\+/, "");
   const math = MATH_NAME.test(name);
-  // PDF のフォント記述子のフラグは当てにならないことが多い（TeX のフォントなど）ので、名前の判定を優先する。
+  // The flags in the font descriptor of a PDF are often unreliable (with TeX fonts, for example), so what the name says takes priority.
   const named = name !== "";
   const mono = MONO_NAME.test(name) || (!named && (font.isMonospace === true || family === "monospace"));
   const sans = SANS_NAME.test(name);
@@ -448,7 +453,7 @@ async function ensureBlocks(view: PageView): Promise<Block[]> {
   return blocks;
 }
 
-// ---------------------------------------------------------------- 訳文の配置
+// ---------------------------------------------------------------- Placing the translations
 
 const DEFAULT_STYLE: SampledStyle = { color: "#000000", background: "#ffffff", ink: false };
 
@@ -457,8 +462,8 @@ function rgb(r: number, g: number, b: number): string {
 }
 
 /**
- * 文字色と背景色を、通常描画と文字なし描画の画素の差から求める。
- * 差がいちばん大きい画素（文字の芯の部分）の色を文字色とする。
+ * Finds the text color and the background color from the pixel differences between the normal rendering and the text-free rendering.
+ * The color of the pixels that differ the most (the core of the glyphs) is taken as the text color.
  */
 function sampleStyle(view: PageView, block: Block): SampledStyle {
   const bare = view.bare;
@@ -508,14 +513,14 @@ function place(view: PageView, block: Block, text: string): void {
     view.styles.set(block.id, style);
   }
   style ??= DEFAULT_STYLE;
-  const placed = placeBlock(view.textLayer, block, text, { ...style, font: view.fonts.get(block.font) });
+  const placed = placeBlock(view.textLayer, block, text, { ...style, font: view.fonts.get(block.font), lang: languageTag(state.targetLanguage) });
   placed.el.addEventListener("mouseenter", () => showHighlight(view, block));
   placed.el.addEventListener("mouseleave", () => (view.highlight.style.display = "none"));
   view.placed.set(block.id, placed);
   if (view.bare && !state.showBare) erase(view.composed.getContext("2d", { alpha: false })!, view, view.bare, block);
 }
 
-/** 描画し直したあと、まだ色を測れていなかった訳文に色を付ける。 */
+/** After a re-render, gives a color to the translations whose color could not be measured yet. */
 function restyle(view: PageView): void {
   if (!view.bare) return;
   for (const [id, placed] of view.placed) {
@@ -555,7 +560,7 @@ async function drawDebug(view: PageView): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------- 翻訳
+// ---------------------------------------------------------------- Translation
 
 function currentPage(): PageView | undefined {
   const top = leftPane.pane.scrollTop + leftPane.pane.clientHeight * 0.35;
@@ -570,23 +575,23 @@ function setBadge(view: PageView, text: string): void {
 async function translate(view: PageView): Promise<void> {
   if (view.request) return;
   try {
-    setStatus(`${view.num} ページ: 文章を取り出しています…`);
+    setStatus(t("extracting", view.num));
     if (view.pixelScale === 0) await render(view);
     const blocks = await ensureBlocks(view);
     await ensureBare(view);
     const targets = blocks.filter((b) => b.translatable && !view.translations.has(b.id) && !view.kept.has(b.id));
     if (targets.length === 0) {
-      setStatus(`${view.num} ページ: 新しく翻訳する文章はありません`);
+      setStatus(t("nothingToTranslate", view.num));
       return;
     }
     const id = ++state.requestSeq;
     view.request = { id, requested: targets.length, received: 0 };
     requests.set(id, view);
-    setBadge(view, `翻訳中 0/${targets.length}`);
-    setStatus(`${view.num} ページ: 翻訳中… 0/${targets.length}`);
+    setBadge(view, t("translatingBadge", 0, targets.length));
+    setStatus(t("translating", view.num, 0, targets.length));
     post({ type: "translatePage", requestId: id, page: view.num, blocks: targets.map((b) => ({ id: b.id, text: b.text })) });
   } catch (err) {
-    fail(`${view.num} ページの翻訳を始められませんでした`, err);
+    fail(t("translateStartFailed", view.num), err);
   }
 }
 
@@ -595,16 +600,16 @@ function onBlockTranslated(message: Extract<HostToWebview, { type: "blockTransla
   const block = view?.blockById.get(message.id);
   if (!view || !block || !view.request) return;
   view.request.received++;
-  if (JAPANESE.test(message.text)) {
+  if (isLeftUntranslated(block.text, message.text, state.targetLanguage)) {
+    // When the translation is the same as the source (a line of only a formula or proper names, for example), the original rendering stays.
+    view.kept.add(block.id);
+  } else {
     view.translations.set(block.id, message.text);
     place(view, block, message.text);
-  } else {
-    // 訳文が原文のまま（数式や固有名だけの行など）なら、原本の表示を残す。
-    view.kept.add(block.id);
   }
-  const progress = `${view.request.received}/${view.request.requested}`;
-  setBadge(view, `翻訳中 ${progress}`);
-  setStatus(`${view.num} ページ: 翻訳中… ${progress}`);
+  const { received, requested } = view.request;
+  setBadge(view, t("translatingBadge", received, requested));
+  setStatus(t("translating", view.num, received, requested));
 }
 
 function finishRequest(requestId: number): PageView | undefined {
@@ -622,11 +627,12 @@ function onTranslateDone(message: Extract<HostToWebview, { type: "translateDone"
   const clipped = [...view.placed.values()].filter((p) => p.clipped).length;
   const inkRemoved = [...view.styles.values()].filter((s) => s.ink).length;
   const notes = [
-    view.kept.size ? `${view.kept.size} ブロックは原文のまま` : "",
-    clipped ? `${clipped} ブロックは省略表示` : "",
-    message.missing.length ? `${message.missing.length} ブロックは訳文が返りませんでした` : "",
+    t("translated", view.num, view.placed.size, message.modelLabel),
+    view.kept.size ? t("noteKept", view.kept.size) : "",
+    clipped ? t("noteClipped", clipped) : "",
+    message.missing.length ? t("noteMissing", message.missing.length) : "",
   ].filter(Boolean);
-  setStatus(`${view.num} ページ: ${view.placed.size} ブロックを翻訳しました（${message.modelLabel}）${notes.length ? "／" + notes.join("／") : ""}`);
+  setStatus(notes.join(" · "));
   report({
     kind: "pageTranslated",
     page: view.num,
@@ -642,28 +648,51 @@ function onTranslateDone(message: Extract<HostToWebview, { type: "translateDone"
 function onTranslateError(message: Extract<HostToWebview, { type: "translateError" }>): void {
   const view = finishRequest(message.requestId);
   if (view) view.request = null;
-  setStatus(`翻訳に失敗しました: ${message.message}`, true);
+  setStatus(t("translateFailed", message.message), true);
   report({ kind: "error", message: message.message });
 }
 
-// ---------------------------------------------------------------- 読み込み
+/** When the target language changes, removes all the translations that are placed (the next translation is done in the new language). */
+function setTargetLanguage(language: string, announce: boolean): void {
+  if (language === state.targetLanguage) return;
+  state.targetLanguage = language;
+  translateButton.title = t("translatePageTitle", language);
+  for (const view of pages) {
+    if (view.request) {
+      post({ type: "cancel", requestId: view.request.id });
+      finishRequest(view.request.id);
+      view.request = null;
+    }
+    for (const placed of view.placed.values()) placed.el.remove();
+    view.placed.clear();
+    view.translations.clear();
+    view.kept.clear();
+    view.styles.clear();
+    view.highlight.style.display = "none";
+    compose(view);
+  }
+  if (announce) setStatus(t("targetLanguageChanged", language));
+}
 
-/** ホストから届いた PDF の中身を Uint8Array にそろえる。 */
+// ---------------------------------------------------------------- Loading
+
+/** Normalizes the contents of the PDF that arrived from the host to a Uint8Array. */
 function toBytes(data: unknown): Uint8Array {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  // Node の Buffer が JSON に変換されて届いた場合（{ type: "Buffer", data: [...] }）。
+  // The case where a Node Buffer arrived converted to JSON ({ type: "Buffer", data: [...] }).
   const json = data as { data?: unknown } | null;
   if (json && Array.isArray(json.data)) return Uint8Array.from(json.data as number[]);
-  throw new Error("PDF のデータを受け取れませんでした。");
+  throw new Error(t("noData"));
 }
 
 async function load(message: Extract<HostToWebview, { type: "init" }>): Promise<void> {
   setModelLabel(message.modelLabel);
-  setStatus(`${message.fileName} を読み込んでいます…`);
+  setTargetLanguage(message.targetLanguage, false);
+  setStatus(t("loading", message.fileName));
 
-  // Webview では、別オリジンにある拡張フォルダーのスクリプトを Worker として直接起動できない。
-  // いったん取得して blob URL にしてから渡す。
+  // A webview cannot start a script in the extension folder, which is on another origin, directly as a Worker.
+  // The script is fetched first, and handed over as a blob URL.
   const workerSource = await (await fetch(message.assets.workerUrl)).blob();
   pdfjs.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
   const worker = new pdfjs.PDFWorker();
@@ -678,9 +707,9 @@ async function load(message: Extract<HostToWebview, { type: "init" }>): Promise<
     cMapPacked: true,
     standardFontDataUrl: message.assets.standardFontDataUrl,
     wasmUrl: message.assets.wasmUrl,
-    // フォントや CMap は Worker からではなく、この文書（メインスレッド）から取得させる。
+    // Fonts and CMaps are to be fetched from this document (the main thread), not from the Worker.
     useWorkerFetch: false,
-    // フォントの PostScript 名（太字・明朝系・数式用の判定に使う）をメインスレッドへ渡させる。
+    // The PostScript names of the fonts (used to tell bold, serif and math fonts) are to be passed to the main thread.
     fontExtraProperties: true,
   }).promise;
 
@@ -692,7 +721,7 @@ async function load(message: Extract<HostToWebview, { type: "init" }>): Promise<
   zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
   for (const view of pages) sizePage(view);
 
-  // 画面の近くにあるページだけ描画し、離れたページのキャンバスは解放する。
+  // Only the pages near the visible area are rendered, and the canvases of the pages far from it are released.
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -712,7 +741,7 @@ async function load(message: Extract<HostToWebview, { type: "init" }>): Promise<
 }
 
 function setModelLabel(label: string | null): void {
-  modelButton.textContent = `モデル: ${label ?? "未選択"}`;
+  modelButton.textContent = t("model", label ?? t("noModel"));
 }
 
 function updateIndicator(): void {
@@ -720,7 +749,7 @@ function updateIndicator(): void {
   pageIndicator.textContent = view ? `${view.num} / ${pages.length}` : "– / –";
 }
 
-// ---------------------------------------------------------------- 操作
+// ---------------------------------------------------------------- Interaction
 
 function syncScroll(from: HTMLElement, to: HTMLElement): void {
   from.addEventListener(
@@ -762,13 +791,13 @@ bareInput.addEventListener("change", async () => {
       if (state.showBare) await ensureBare(view);
       compose(view);
     } catch (err) {
-      fail(`${view.num} ページの文字なし描画に失敗しました`, err);
+      fail(t("textFreeFailed", view.num), err);
     }
   }
 });
 blocksInput.addEventListener("change", () => {
   state.showBlocks = blocksInput.checked;
-  for (const view of pages) void drawDebug(view).catch((err) => fail("ブロックの検出に失敗しました", err));
+  for (const view of pages) void drawDebug(view).catch((err) => fail(t("blocksFailed"), err));
 });
 
 new ResizeObserver(() => {
@@ -780,10 +809,13 @@ window.addEventListener("message", (event: MessageEvent<HostToWebview>) => {
   if (!message || typeof message.type !== "string") return;
   switch (message.type) {
     case "init":
-      void load(message).catch((err) => fail("PDF を読み込めませんでした", err));
+      void load(message).catch((err) => fail(t("loadFailed"), err));
       break;
     case "modelChanged":
       setModelLabel(message.modelLabel);
+      break;
+    case "targetLanguageChanged":
+      setTargetLanguage(message.targetLanguage, true);
       break;
     case "blockTranslated":
       onBlockTranslated(message);
@@ -800,11 +832,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebview>) => {
   }
 });
 
-// 実行時のエラーと CSP 違反をホストへ知らせる（ログと結合テストで拾う）。
+// Run-time errors and CSP violations are reported to the host (the log and the end-to-end test pick them up).
 window.addEventListener("error", (event) => report({ kind: "error", message: `error: ${event.message}` }));
 window.addEventListener("unhandledrejection", (event) => {
   const reason = event.reason as unknown;
-  // 描画の取り消しは、拡大縮小やページの切り替えで普通に起きる。
+  // A cancelled rendering is normal: zooming and switching pages both cause it.
   if (reason instanceof pdfjs.RenderingCancelledException) return;
   report({ kind: "error", message: `unhandledrejection: ${reason instanceof Error ? reason.message : String(reason)}` });
 });

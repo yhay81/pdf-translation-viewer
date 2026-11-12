@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E5484D"/>
+      <stop offset="1" stop-color="#8C1D2B"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#background)"/>
+  <!-- The source page, with the folded corner of a document -->
+  <path d="M50 50H96L124 78V190a16 16 0 0 1-16 16H50a16 16 0 0 1-16-16V66a16 16 0 0 1 16-16Z" fill="#FFFFFF"/>
+  <path d="M96 50V68a10 10 0 0 0 10 10H124Z" fill="#F0C4C8"/>
+  <text x="76" y="138" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="700" font-size="66" fill="#8C1D2B">A</text>
+  <rect x="50" y="158" width="58" height="10" rx="5" fill="#F0C4C8"/>
+  <rect x="50" y="178" width="42" height="10" rx="5" fill="#F0C4C8"/>
+  <!-- The translated page, in the same layout -->
+  <path d="M148 50H194L222 78V190a16 16 0 0 1-16 16H148a16 16 0 0 1-16-16V66a16 16 0 0 1 16-16Z" fill="#FFE7A1"/>
+  <path d="M194 50V68a10 10 0 0 0 10 10H222Z" fill="#F0BF52"/>
+  <text x="174" y="136" text-anchor="middle" font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, sans-serif" font-weight="700" font-size="58" fill="#9A4A00">あ</text>
+  <rect x="148" y="158" width="58" height="10" rx="5" fill="#F0BF52"/>
+  <rect x="148" y="178" width="42" height="10" rx="5" fill="#F0BF52"/>
+</svg>

@@ -1,0 +1,12 @@
+{
+  "displayName": "PDF Translation Viewer",
+  "description": "PDF とその訳文を左右に並べ、訳文を元のレイアウトに重ねて表示します。GitHub Copilot など、VS Code で使える言語モデルで翻訳します。",
+  "category": "PDF Translation",
+  "customEditor.displayName": "PDF Translation Viewer",
+  "command.translateCurrentPage": "表示中のページを翻訳",
+  "command.selectModel": "モデルを選ぶ",
+  "command.listModels": "利用できる言語モデルを一覧表示",
+  "command.clearCache": "翻訳キャッシュを消去",
+  "config.targetLanguage": "翻訳先の言語。翻訳者に伝えるときのように、`Japanese`、`Simplified Chinese`、`Brazilian Portuguese` などと書きます。",
+  "capabilities.untrustedWorkspaces": "信頼していないワークスペースでは、ワークスペースが設定した翻訳先の言語を使いません。この設定はプロンプトの一部になるためです。"
+}

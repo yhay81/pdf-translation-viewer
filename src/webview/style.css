@@ -1,4 +1,4 @@
-/* VS Code のテーマ変数を使い、変数がない場所（検証用ページ）では既定値に落とす。 */
+/* Uses the theme variables of VS Code, and falls back to default values where they are missing (the harness page). */
 :root {
   color-scheme: light dark;
 }
@@ -73,7 +73,10 @@ body {
   color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
+/* An error is shown in full, on a row of its own. */
 #toolbar .status.error {
+  flex-basis: 100%;
+  white-space: normal;
   color: var(--vscode-errorForeground, #f48771);
 }
 
@@ -93,7 +96,7 @@ body {
   border-left: 1px solid var(--vscode-panel-border, #454545);
 }
 
-/* ペインの左上に固定する「原文」「訳文」の札。高さ 0 の sticky 要素にして、ページの位置を動かさない。 */
+/* The "Source" and "Translation" labels pinned to the top left of each pane. They are sticky elements of zero height, so that they do not shift the pages. */
 .pane-label {
   position: sticky;
   top: 0;
@@ -142,7 +145,7 @@ body {
   height: 100%;
 }
 
-/* レイヤーは pt 座標の BASE 倍で組み、transform で表示倍率に合わせる（main.ts の sizePage）。 */
+/* A layer is laid out at BASE times the pt coordinates, and a transform brings it to the display scale (sizePage in main.ts). */
 .layer {
   position: absolute;
   left: 0;
@@ -151,7 +154,7 @@ body {
   pointer-events: none;
 }
 
-/* 訳文のブロック */
+/* A block of translation */
 .tb {
   position: absolute;
   box-sizing: border-box;
@@ -175,7 +178,7 @@ body {
   height: 0;
 }
 
-/* 枠に収まらなかった訳文は下端をぼかして切り、ホバーで全文を出す。 */
+/* A translation that did not fit in its box is cut short with a fade at the bottom edge, and shows in full on hover. */
 .tb.clipped {
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
@@ -192,7 +195,7 @@ body {
   box-shadow: 0 0 0 16px var(--tb-bg, #ffffff), 0 8px 40px 16px rgba(0, 0, 0, 0.35);
 }
 
-/* 右の訳文にマウスを載せたとき、左の原文の対応箇所に出す印 */
+/* The mark shown on the matching part of the source on the left while the pointer is over a translation on the right */
 .highlight {
   position: absolute;
   display: none;
@@ -201,7 +204,7 @@ body {
   outline-offset: 6px;
 }
 
-/* 「ブロック枠」の表示 */
+/* The "Block outlines" display */
 .debug-block {
   position: absolute;
   box-sizing: border-box;
