@@ -128,13 +128,13 @@
     "harness": "node harness/server.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.7",
     "@types/vscode": "1.104.0",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^4.1.0",
-    "esbuild": "^0.25.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.2",
     "ovsx": "^1.4.0",
     "pdfjs-dist": "6.5.438",
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   }
 }
