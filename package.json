@@ -136,5 +136,10 @@
     "ovsx": "^1.4.0",
     "pdfjs-dist": "6.5.438",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "^11.0.9"
+    }
   }
 }
